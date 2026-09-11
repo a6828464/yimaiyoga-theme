@@ -16,7 +16,10 @@
       var button=form.querySelector('button[type="submit"]');
       if(msg){msg.textContent='提交中...'}
       if(button){button.disabled=true}
-      fetch(form.action,{method:'POST',body:new FormData(form),headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){if(msg){msg.textContent=(data&&data.data&&data.data.message)||(data&&data.message)||'已提交，我们会尽快联系你。'}form.reset()}).catch(function(error){if(msg){msg.textContent=(error&&error.data&&error.data.message)||(error&&error.message)||'提交失败，请稍后再试或电话联系门店。'}}).finally(function(){if(button){button.disabled=false}})
+      // 表单内有 name="action" 的隐藏字段（admin-ajax 必需），form.action 会被该控件遮蔽
+      // （返回 input 元素，拼出 [object HTMLInputElement] 的 404 地址），必须读属性或用 localize 的地址
+      var endpoint=(window.yimaiAjax&&yimaiAjax.url)||form.getAttribute('action');
+      fetch(endpoint,{method:'POST',body:new FormData(form),headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(res){return res.text().then(function(text){var data;try{data=JSON.parse(text)}catch(e){throw{message:'提交失败，请稍后再试或电话联系门店。'}}if(!res.ok){throw (data&&data.data&&data.data.message)?{message:data.data.message}:data}return data})}).then(function(data){if(msg){msg.textContent=(data&&data.data&&data.data.message)||(data&&data.message)||'已提交，我们会尽快联系你。'}form.reset()}).catch(function(error){if(msg){msg.textContent=(error&&error.data&&error.data.message)||(error&&error.message)||'提交失败，请稍后再试或电话联系门店。'}}).finally(function(){if(button){button.disabled=false}})
     })
   })
 })();
