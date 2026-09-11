@@ -10,11 +10,12 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.1.0');
+define('YIMAI_VERSION', '1.2.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
 require_once YIMAI_THEME_DIR . '/inc/site-data.php';
+require_once YIMAI_THEME_DIR . '/inc/imgbed.php';
 
 /* -------------------------------------------------------------------------
  * 主题支持
@@ -152,7 +153,15 @@ function yimai_image_url(?string $path): string
         return $path;
     }
     // 主题内图片目录 assets/images/uploads/ 对应原站 /uploads/
-    return YIMAI_THEME_URI . '/assets/images' . $path;
+    // 已同步图床的文件优先走图床（app.js 在加载失败时按 footer 的兜底映射换回本地）
+    $map = yimai_imgbed_map();
+    if (isset($map[$path])) {
+        $config = yimai_imgbed_config();
+        if ($config !== []) {
+            return $config['domain'] . '/' . $map[$path];
+        }
+    }
+    return yimai_local_image_url($path);
 }
 
 function yimai_nav_items(): array

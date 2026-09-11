@@ -50,5 +50,9 @@ $icpNumber = $site['icpNumber'] ?? '';
   <?php endif; ?>
 </footer>
 <?php wp_footer(); ?>
+<?php $imgbedFallback = function_exists('yimai_imgbed_fallback_map') ? yimai_imgbed_fallback_map() : []; ?>
+<?php if ($imgbedFallback): ?>
+<script>window.YIMAI_IMG_FALLBACK = <?php echo wp_json_encode($imgbedFallback, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;</script>
+<?php endif; ?>
 </body>
 </html>

@@ -9,6 +9,15 @@
     var panels=root.querySelectorAll('[data-teacher-panel]');
     tabs.forEach(function(tab){tab.addEventListener('click',function(){var id=tab.getAttribute('data-teacher-tab');tabs.forEach(function(t){t.classList.remove('active')});panels.forEach(function(p){p.classList.remove('active')});tab.classList.add('active');var panel=root.querySelector('[data-teacher-panel="'+id+'"]');if(panel){panel.classList.add('active');panel.scrollIntoView({behavior:'smooth',block:'nearest'})}})})
   });
+  // 图床图片加载失败时，按兜底映射换回本地地址（footer.php 输出 YIMAI_IMG_FALLBACK）
+  document.addEventListener('error', function(e){
+    var el = e.target;
+    if (!el || el.tagName !== 'IMG' || !window.YIMAI_IMG_FALLBACK) return;
+    var src = el.currentSrc || el.src;
+    if (!src) return;
+    var fb = window.YIMAI_IMG_FALLBACK[src];
+    if (fb) { el.src = fb; }
+  }, true);
   document.querySelectorAll('[data-booking-form]').forEach(function(form){
     form.addEventListener('submit',function(event){
       event.preventDefault();

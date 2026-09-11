@@ -156,6 +156,26 @@ function verify_csrf(): void
     }
 }
 
+
+/**
+ * 上传出口：确保本地文件已落盘后，尽力同步图床并写入映射，最后返回统一结构。
+ * 图床失败完全静默——本地文件始终可用。
+ */
+function yimai_finish_upload(string $target, string $mime, string $name): array
+{
+    if (is_file($target)) {
+        try {
+            $imgbedPath = yimai_imgbed_upload($target, $mime, $name);
+            if ($imgbedPath !== null) {
+                yimai_imgbed_remember('/uploads/' . $name, $imgbedPath);
+            }
+        } catch (Throwable $e) {
+            // 图床同步失败不影响上传结果
+        }
+    }
+    return ['ok' => true, 'path' => '/uploads/' . $name];
+}
+
 /* ---------- 上传（存主题 assets/images/uploads，对应原站 /uploads/） ---------- */
 function upload_path(): string
 {
@@ -199,7 +219,7 @@ function save_uploaded_image(array $file, string $field = ''): array
 
     if ($mime === 'image/gif' || !function_exists('imagecreatetruecolor')) {
         move_uploaded_file($tmp, $target);
-        return ['ok' => true, 'path' => '/uploads/' . $name];
+        return yimai_finish_upload($target, $mime, $name);
     }
 
     [$width, $height] = $info;
@@ -226,7 +246,7 @@ function save_uploaded_image(array $file, string $field = ''): array
     };
     if (!$source) {
         move_uploaded_file($tmp, $target);
-        return ['ok' => true, 'path' => '/uploads/' . $name];
+        return yimai_finish_upload($target, $mime, $name);
     }
     $canvas = imagecreatetruecolor($newWidth, $newHeight);
     // 透明通道：先填充透明色，避免 PNG 透明区域变黑
@@ -252,7 +272,7 @@ function save_uploaded_image(array $file, string $field = ''): array
     }
     imagedestroy($source);
     imagedestroy($canvas);
-    return ['ok' => true, 'path' => '/uploads/' . $name];
+    return yimai_finish_upload($target, $mime, $name);
 }
 
 /* ---------- 渲染 ---------- */
