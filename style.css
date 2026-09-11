@@ -1,0 +1,21 @@
+/*
+Theme Name: 一麦瑜伽官网 (Yi Mai Yoga)
+Theme URI: https://www.yimaiyoga.com
+Author: 一麦品牌部 (converted from yimaiyoga.com MVC)
+Author URI: https://www.yimaiyoga.com
+Description: 由 yimaiyoga.com 官网项目转换的 WordPress 主题。保留原站的页面结构、配色变量与交互（滚动显现、师资 Tab、预约表单）。主题变量为 ebony-ivory（黑檀米白）。
+Version: 1.1.0
+Requires at least: 6.0
+Tested up to: 6.7
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: yimaiyoga
+Tags: one-column, custom-colors, custom-menu, featured-images, translation-ready
+*/
+
+/*
+ * 实际样式在 assets/css/app.css / fix.css / mobile-fix.css 中。
+ * 本文件仅包含 WP 主题头信息与少量 WP 必须样式。
+ * 主题配色由 functions.php 注入 :root CSS 变量（ebony-ivory）。
+ */
