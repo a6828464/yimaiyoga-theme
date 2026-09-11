@@ -70,7 +70,9 @@ function yimai_update_state(): array
 function yimai_update_remote_meta(?string &$source_used = null): array
 {
     foreach (yimai_update_sources() as $source => $urls) {
-        $resp = wp_remote_get($urls['manifest'], ['timeout' => 12, 'headers' => ['Accept' => 'application/json']]);
+        // 加时间戳破缓存：GitHub/Gitee 对同名 Release 资产有 CDN 缓存，重建同名 Release 后可能仍吐旧文件
+        $url = $urls['manifest'] . (strpos($urls['manifest'], '?') === false ? '?' : '&') . 't=' . time();
+        $resp = wp_remote_get($url, ['timeout' => 12, 'headers' => ['Accept' => 'application/json']]);
         if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
             continue;
         }
@@ -112,11 +114,13 @@ function yimai_update_ensure_dir(string $dir): void
     }
 }
 
-/** 下载更新包到临时文件，Gitee 优先、GitHub 兜底，返回 [文件, 来源] */
+/** 下载更新包到临时文件，GitHub 优先、Gitee 兜底，返回 [文件, 来源] */
 function yimai_update_download_package(string $dest): array
 {
     foreach (yimai_update_sources() as $source => $urls) {
-        $resp = wp_remote_get($urls['package'], [
+        // 时间戳破 CDN 缓存（同名 Release 资产重建后 GitHub 边缘节点可能仍吐旧包）
+        $url = $urls['package'] . (strpos($urls['package'], '?') === false ? '?' : '&') . 't=' . time();
+        $resp = wp_remote_get($url, [
             'timeout' => 240,
             'user-agent' => 'YimaiTheme-Updater/1.0',
         ]);
@@ -180,7 +184,7 @@ function yimai_update_extract(string $zipfile, string $dest): string
 }
 
 /** 更新前备份当前主题代码（跳过图片目录与历史备份），保留最近 2 份 */
-function yimai_update_backup(string &$log): string
+function yimai_update_backup(array &$log): string
 {
     $theme = get_template_directory();
     $backupDir = $theme . '/.backups';
@@ -229,7 +233,7 @@ function yimai_update_backup(string &$log): string
 }
 
 /** 递归覆盖：包内文件 → 主题目录。不删除服务器上的多余文件，路径含 .. 直接拒绝 */
-function yimai_update_apply(string $root, string &$log): int
+function yimai_update_apply(string $root, array &$log): int
 {
     $theme = get_template_directory();
     $count = 0;
@@ -256,7 +260,7 @@ function yimai_update_apply(string $root, string &$log): int
 }
 
 /** 更新后一次性数据迁移（幂等） */
-function yimai_update_migrate(string &$log): void
+function yimai_update_migrate(array &$log): void
 {
     $raw = get_option('yimai_site_config', '');
     $config = $raw ? json_decode((string) $raw, true) : [];
