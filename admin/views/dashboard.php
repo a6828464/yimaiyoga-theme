@@ -119,6 +119,8 @@ input:focus,textarea:focus{border-color:var(--clay)}
       <label>关键词（每行一个）<textarea data-path="site.keywords" data-array-lines><?php echo h(implode("\n", $config['site']['keywords'] ?? [])); ?></textarea></label>
       <label>备案号<input data-path="site.icpNumber" value="<?php echo h($config['site']['icpNumber'] ?? ''); ?>"></label>
       <label>企业微信 Webhook<input data-path="site.wecomWebhook" value="<?php echo h($config['site']['wecomWebhook'] ?? ''); ?>"><span class="hint">预约表单提交后推送消息的企微群</span></label>
+      <label>图床地址<input data-path="site.imgbedDomain" value="<?php echo h($config['site']['imgbedDomain'] ?? ''); ?>" placeholder="https://image.shunan.fun"><span class="hint">后台上传的图片自动同步一份到图床，前台优先使用图床链接；留空仅存本地</span></label>
+      <label>图床上传密码<input data-path="site.imgbedAuthCode" value="<?php echo h($config['site']['imgbedAuthCode'] ?? ''); ?>" placeholder="图床后台的安全设置 → 用户授权码"><span class="hint">图床「安全设置」里的用户授权码，图床侧修改后需同步更新此处</span></label>
     </div>
   </div>
   <div class="card">

@@ -29,6 +29,9 @@ function yimai_site_data(): array
             // 企业微信 Webhook 不入库不入 git：运行时优先读后台保存的 site.wecomWebhook，
             // 其次读 inc/local-secrets.php 的 wecom_webhook（见 functions.php yimai_wecom_webhook()）
             'wecomWebhook' => '',
+            // 图床（后台「基础与SEO」可配置；留空时回退 local-secrets.php，都没有则仅存本地）
+            'imgbedDomain' => '',
+            'imgbedAuthCode' => '',
             'theme' => 'ebony-ivory',
             'customTheme' => [
                 'linen' => '#ffffff',

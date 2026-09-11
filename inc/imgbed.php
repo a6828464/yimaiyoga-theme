@@ -18,9 +18,17 @@ const YIMAI_IMGBED_MAP_OPTION = 'yimai_imgbed_map';
 
 function yimai_imgbed_config(): array
 {
+    // 解析顺序与企微 webhook 一致：后台配置（DB）→ local-secrets.php → 空（仅存本地）
+    $config = yimai_config()['site'] ?? [];
     $secrets = yimai_site_secrets();
-    $domain = rtrim(trim((string) ($secrets['imgbed_domain'] ?? '')), '/');
-    $code = trim((string) ($secrets['imgbed_auth_code'] ?? ''));
+    $domain = rtrim(trim((string) ($config['imgbedDomain'] ?? '')), '/');
+    $code = trim((string) ($config['imgbedAuthCode'] ?? ''));
+    if ($domain === '') {
+        $domain = rtrim(trim((string) ($secrets['imgbed_domain'] ?? '')), '/');
+    }
+    if ($code === '') {
+        $code = trim((string) ($secrets['imgbed_auth_code'] ?? ''));
+    }
     if ($domain === '') {
         return [];
     }
