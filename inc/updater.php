@@ -22,13 +22,16 @@ const YIMAI_UPDATE_GITHUB_REPO = 'a6828464/yimaiyoga-theme';
 
 function yimai_update_sources(): array
 {
+    // 发布走 Release 固定资产 URL（对齐一麦工作台模式）。
+    // 不用 Gitee repository/archive 与 raw 接口：匿名访问会被反爬拦截（403/HTML）。
+    // GitHub 包走 codeload 分支归档（2026-09 服务器实测可达），清单/包均 Gitee 优先。
     return [
         'gitee' => [
-            'manifest' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/raw/main/theme.json',
-            'package' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/repository/archive/main.zip',
+            'manifest' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
+            'package' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
         ],
         'github' => [
-            'manifest' => 'https://raw.githubusercontent.com/' . YIMAI_UPDATE_GITHUB_REPO . '/main/theme.json',
+            'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
             'package' => 'https://codeload.github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/zip/refs/heads/main',
         ],
     ];
@@ -148,15 +151,20 @@ function yimai_update_extract(string $zipfile, string $dest): string
             throw new RuntimeException('解压失败：' . $zip->errorInfo(true));
         }
     }
-    // 定位包含 theme.json 的包根目录（GitHub 为 <repo>-main，Gitee 为 <repo> 或带 hash 后缀）
+    // 定位包根（含 theme.json 的目录）：GitHub codeload 包为 <repo>-main 一层目录，
+    // 本地发布脚本打的 zip 包根即主题根（无外层目录）
     $root = '';
-    foreach ((array) scandir($dest) as $entry) {
-        if ($entry === '.' || $entry === '..') {
-            continue;
-        }
-        if (is_file($dest . '/' . $entry . '/theme.json')) {
-            $root = $dest . '/' . $entry;
-            break;
+    if (is_file($dest . '/theme.json')) {
+        $root = $dest;
+    } else {
+        foreach ((array) scandir($dest) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if (is_file($dest . '/' . $entry . '/theme.json')) {
+                $root = $dest . '/' . $entry;
+                break;
+            }
         }
     }
     if ($root === '') {
