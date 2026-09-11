@@ -11,13 +11,17 @@
 对齐「一麦工作台」的发布模式：本地迭代 → 推送双平台 → 线上后台一键更新。
 
 ```
-本地修改代码 → git push origin main   # 同时推送 GitHub + Gitee
+本地修改代码 → git push   # 推送主仓库 Gitee（国内直连，稳定）
+        ↓
+tools/release.sh          # 校验 Gitee 已推 → 自动补推 GitHub 镜像 → 刷新双平台 Release
         ↓
 后台 /admin → 在线更新 → 检查更新 → 立即更新
 ```
 
-- 远程仓库：GitHub `a6828464/yimaiyoga-theme`（主）+ Gitee `meng-taoo/yimaiyoga-theme`（备）
-- 服务器端拉取顺序：Gitee 优先（国内连通性好），GitHub（codeload）兜底
+- 主仓库（source of truth）：Gitee `meng-taoo/yimaiyoga-theme`——origin 的 fetch/push 都指向它
+- 发布镜像：GitHub `a6828464/yimaiyoga-theme`（remote 名 `github`）——release.sh 发布时自动补推并校验
+- 服务器端拉取顺序：codeload（GitHub 分支归档，内容实时生成）主源，Gitee Release 资产兜底
+- 服务器端更新实现：`inc/updater.php`，纯 PHP（服务器未装 zip 扩展，走 WordPress 内置 PclZip）
 - 实现：`inc/updater.php`，纯 PHP（服务器未装 zip 扩展，走 WordPress 内置 PclZip）
 - 更新行为：只覆盖包内文件；**不删除**服务器本地文件（`inc/local-secrets.php`、
   `assets/images/uploads/` 后台上传图、`.backups/` 备份均不受影响）
