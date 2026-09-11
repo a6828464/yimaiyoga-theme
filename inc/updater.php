@@ -22,10 +22,9 @@ const YIMAI_UPDATE_GITHUB_REPO = 'a6828464/yimaiyoga-theme';
 
 function yimai_update_sources(): array
 {
-    // 发布走 Release 固定资产 URL（对齐一麦工作台模式）。
-    // 不用 Gitee repository/archive 与 raw 接口：匿名访问会被反爬拦截（403/HTML）。
-    // 渠道顺序与工作台 update.sh 一致：GitHub 优先（2026-09 服务器实测 codeload/release 均 200；
-    // Gitee 新仓库资产有 403 审核期，成熟后自动恢复兜底能力）。
+    // 包：GitHub codeload 分支归档优先——内容实时生成，绝无 CDN 缓存旧包问题
+    // （实测教训：releases/download 同名资产重建后 GitHub 边缘节点会持续吐旧包，时间戳参数也穿不透）。
+    // 清单：Gitee 资产优先 + 时间戳；都不可达时「立即更新」仍可执行（以包内 theme.json 为准）。
     return [
         'github' => [
             'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
