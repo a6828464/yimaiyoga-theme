@@ -95,6 +95,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","
 .side-nav button:hover{background:var(--hover)}
 .side-nav button.active{background:var(--active-bg);color:var(--active-fg)}
 .side-dot{width:7px;height:7px;border-radius:50%;background:#d05a3a;display:inline-block;margin-left:auto}
+.side-dot[hidden]{display:none}
 .side-foot{border-top:1px solid var(--line);padding:12px 18px;display:flex;gap:16px;font-size:12px}
 .side-foot a{color:var(--mut);text-decoration:none}
 .side-foot a:hover{color:var(--ink)}
