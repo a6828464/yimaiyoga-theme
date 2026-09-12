@@ -299,6 +299,19 @@ function yimai_update_migrate(array &$log): void
         $log[] = '已修复后台配置中失效的 favicon 路径';
     }
 
+    // 规范化图床映射：旧版本可能写入带前导斜杠的路径（拼出 //file/ 双斜杠 URL）
+    $mapRaw = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
+    if ($mapRaw !== []) {
+        $clean = [];
+        foreach ($mapRaw as $k => $v) {
+            $clean[(string) $k] = ltrim((string) $v, '/');
+        }
+        if ($clean !== $mapRaw) {
+            update_option('yimai_imgbed_map', $clean, false);
+            $log[] = '已规范化图床映射中的路径斜杠';
+        }
+    }
+
     // v1.3.0 起图片地址「所见即所得」：把配置中已同步图床的本地路径改写为图床 URL，
     // 与旧版「自动优先图床」的前台表现保持一致；未同步的图片保持本地路径不动。
     $map = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
