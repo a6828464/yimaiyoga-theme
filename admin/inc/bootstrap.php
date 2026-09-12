@@ -310,6 +310,47 @@ function save_uploaded_image(array $file, string $field = ''): array
     return yimai_finish_upload($target, $mime, $name);
 }
 
+/**
+ * 图片库：列出本地已上传的全部图片（后台「图片库」弹窗数据源）。
+ * 已同步图床的图片带 imgbed 完整地址（缩略图走图床 CDN，选择时可写图床地址）。
+ */
+function yimai_image_library(): array
+{
+    $dir = upload_path();
+    $map = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
+    $imgbedConfig = function_exists('yimai_imgbed_config') ? yimai_imgbed_config() : [];
+    $items = [];
+    foreach ((array) @scandir($dir) as $file) {
+        if ($file === '.' || $file === '..' || str_starts_with($file, '.')) {
+            continue;
+        }
+        $abs = $dir . '/' . $file;
+        if (!is_file($abs)) {
+            continue;
+        }
+        $info = @getimagesize($abs);
+        if (!$info) {
+            continue;
+        }
+        $rel = '/uploads/' . $file;
+        $item = [
+            'path' => $rel,
+            'imgbed' => null,
+            'width' => (int) ($info[0] ?? 0),
+            'height' => (int) ($info[1] ?? 0),
+            'time' => (int) @filemtime($abs),
+        ];
+        if (isset($map[$rel]) && $imgbedConfig !== []) {
+            $item['imgbed'] = $imgbedConfig['domain'] . '/' . ltrim((string) $map[$rel], '/');
+        }
+        $items[] = $item;
+    }
+    usort($items, function ($a, $b) {
+        return $b['time'] <=> $a['time'];
+    });
+    return ['ok' => true, 'items' => array_slice($items, 0, 500)];
+}
+
 /* ---------- 渲染 ---------- */
 /**
  * 后台图片字段：预览 + 地址输入 + 「本地 / 图床」切换 + 上传按钮。
@@ -328,7 +369,7 @@ function admin_image_field(string $path, string $label, string $value, string $h
         <button type="button" data-src-btn="imgbed" <?php if ($isRemote) echo 'class="active"'; ?>>图床加速</button>
         <span class="src-hint" data-src-hint="<?php echo h($path); ?>"></span>
       </div>
-      <div class="file-row"><input type="file" data-upload-for="<?php echo h($path); ?>" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="<?php echo h($path); ?>">上传新图</button></div>
+      <div class="file-row"><input type="file" data-upload-for="<?php echo h($path); ?>" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="<?php echo h($path); ?>">上传新图</button><button type="button" class="upload-btn" data-library-for="<?php echo h($path); ?>">图片库</button></div>
       <?php if ($hint !== ''): ?><span class="hint"><?php echo h($hint); ?></span><?php endif; ?>
     </label>
     <?php

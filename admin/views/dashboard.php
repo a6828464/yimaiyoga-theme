@@ -175,6 +175,24 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 .admin-theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
 .admin-theme-grid .theme-card{padding:10px 12px}
 .admin-theme-grid .theme-swatch i{width:13px;height:13px}
+/* 图片库 */
+.lib-backdrop{position:fixed;inset:0;z-index:80;background:rgb(0 0 0/.45);display:flex;align-items:center;justify-content:center;padding:18px;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s ease,visibility .25s ease}
+.lib-backdrop.open{opacity:1;visibility:visible;pointer-events:auto}
+.lib-panel{background:var(--card);border:1px solid var(--line);border-radius:14px;width:min(820px,100%);height:min(620px,84vh);display:flex;flex-direction:column;overflow:hidden;transform:translateY(12px);transition:transform .25s ease}
+.lib-backdrop.open .lib-panel{transform:none}
+.lib-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.lib-head b{font-size:14px;flex:none}
+.lib-count{font-size:11px;color:var(--mut);flex:none}
+.lib-search{flex:1;min-width:80px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;background:var(--input);outline:none;color:var(--ink)}
+.lib-search:focus{border-color:var(--clay)}
+.lib-close{width:30px;height:30px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:17px;line-height:1;cursor:pointer}
+.lib-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px;padding:14px;align-content:start}
+.lib-item{position:relative;display:grid;gap:5px;border:1px solid var(--line);border-radius:10px;background:var(--item);padding:8px;cursor:pointer;text-align:left}
+.lib-item:hover{border-color:var(--clay)}
+.lib-thumb{display:block;height:76px;border-radius:6px;overflow:hidden;background:var(--imgbg)}
+.lib-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.lib-name{font-size:10.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-badge{position:absolute;top:12px;right:12px;font-style:normal;font-size:9.5px;background:var(--clay);color:#fff;border-radius:999px;padding:2px 7px}
 /* ---------- 手机端：顶栏 + 左侧抽屉 ---------- */
 @media(max-width:880px){
   body{padding-bottom:96px}
@@ -514,6 +532,18 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 </div>
 </div>
 
+<div class="lib-backdrop" data-library>
+  <div class="lib-panel" role="dialog" aria-modal="true" aria-label="选择图片">
+    <div class="lib-head">
+      <b>图片库</b>
+      <span class="lib-count" data-library-status></span>
+      <input class="lib-search" data-library-search type="text" placeholder="搜索文件名…">
+      <button class="lib-close" type="button" data-library-close aria-label="关闭图片库">×</button>
+    </div>
+    <div class="lib-grid" data-library-grid><p class="hint" style="padding:20px">正在加载…</p></div>
+  </div>
+</div>
+
 <script>
 window.CSRF_TOKEN = <?php echo wp_json_encode(csrf_token()); ?>;
 window.CONFIG = <?php echo wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -523,7 +553,7 @@ window.YIMAI_IMGBED = {
   map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
 };
 </script>
-<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=5'); ?>"></script>
+<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=6'); ?>"></script>
 <script>
 /* ---------- 在线更新 ---------- */
 (function () {

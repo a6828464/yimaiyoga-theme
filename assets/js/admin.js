@@ -51,7 +51,7 @@
       +'<button type="button" data-src-btn="local" class="'+(isRemote?'':'active')+'">本地</button>'
       +'<button type="button" data-src-btn="imgbed" class="'+(isRemote?'active':'')+'">图床</button>'
       +'<span class="src-hint" data-src-hint="'+path+'"></span></div>';
-    html+='<div class="file-row"><input type="file" data-upload-for="'+path+'" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="'+path+'">上传图片</button></div>';
+    html+='<div class="file-row"><input type="file" data-upload-for="'+path+'" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="'+path+'">上传图片</button><button type="button" class="upload-btn" data-library-for="'+path+'">图片库</button></div>';
     return '<div style="margin-top:10px">'+html+'</div>';
   }
 
@@ -63,7 +63,7 @@
   function closeDrawer(){if(drawer){drawer.classList.remove('open')}if(backdrop){backdrop.classList.remove('open')}}
   document.querySelectorAll('[data-drawer-open]').forEach(function(b){b.addEventListener('click',openDrawer)});
   document.querySelectorAll('[data-drawer-close]').forEach(function(b){b.addEventListener('click',closeDrawer)});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer()}});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeLibrary()}});
   function showTab(name){
     document.querySelectorAll('[data-tab]').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===name)});
     document.querySelectorAll('[data-panel]').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===name)});
@@ -333,6 +333,7 @@
       updatePreview(path);
       refreshToggle(path);
       input.value='';
+      LIB.data=null; /* 新图已落盘，下次打开图片库重新拉取 */
       msg('已上传：'+value+'（点保存生效）');
     }).catch(function(error){msg(error.message||'上传失败')});
   }
@@ -348,6 +349,8 @@
       if(fileInput){fileInput.click()}
       return;
     }
+    var libBtn=e.target.closest?e.target.closest('[data-library-for]'):null;
+    if(libBtn){openLibrary(libBtn.getAttribute('data-library-for'));return}
     var btn=e.target.closest?e.target.closest('[data-src-btn]'):null;
     if(btn){handleSrcBtn(btn);return}
     var delImg=e.target.closest?e.target.closest('[data-del-studio-img]'):null;
@@ -432,6 +435,85 @@
       });
     });
   })();
+
+  /* ================= 图片库（本地上传过的图片，已同步图床的优先图床地址） ================= */
+  var LIB={data:null,target:null};
+  function localImageSrc(path){return (window.YIMAI_URI||'')+'/assets/images'+path}
+  function openLibrary(path){
+    LIB.target=path;
+    var modal=document.querySelector('[data-library]');
+    if(!modal)return;
+    modal.classList.add('open');
+    if(LIB.data){renderLibrary()}
+    else{
+      var grid=modal.querySelector('[data-library-grid]');
+      grid.innerHTML='<p class="hint" style="padding:20px">正在加载图片库…</p>';
+      fetch('/admin/library',{headers:{'X-CSRF-TOKEN':window.CSRF_TOKEN||''}})
+        .then(function(r){return r.json()})
+        .then(function(d){LIB.data=(d&&d.items)||[];renderLibrary()})
+        .catch(function(){grid.innerHTML='<p class="hint" style="padding:20px">加载失败，请关闭后重试</p>'});
+    }
+    setTimeout(function(){var s=modal.querySelector('[data-library-search]');if(s){s.focus()}},120);
+  }
+  function closeLibrary(){
+    var modal=document.querySelector('[data-library]');
+    if(modal){modal.classList.remove('open')}
+  }
+  function renderLibrary(){
+    var modal=document.querySelector('[data-library]');
+    if(!modal||!LIB.data)return;
+    var grid=modal.querySelector('[data-library-grid]');
+    var status=modal.querySelector('[data-library-status]');
+    var q=(modal.querySelector('[data-library-search]').value||'').trim().toLowerCase();
+    var list=LIB.data.filter(function(it){
+      return !q||it.path.toLowerCase().indexOf(q)>=0;
+    });
+    status.textContent='共 '+list.length+' 张'+(q?'（已筛选）':'');
+    if(!list.length){
+      grid.innerHTML='<p class="hint" style="padding:20px">没有匹配的图片。图片库收录后台上传过的全部图片，新上传的图片保存页面后即可在这里选到。</p>';
+      return;
+    }
+    grid.innerHTML=list.map(function(it){
+      var idx=LIB.data.indexOf(it);
+      var src=it.imgbed||localImageSrc(it.path);
+      var fb=it.imgbed?localImageSrc(it.path):'';
+      return '<button type="button" class="lib-item" data-lib-idx="'+idx+'" title="'+esc(it.path.replace('/uploads/',''))+'">'
+        +'<span class="lib-thumb"><img src="'+esc(src)+'" data-fb="'+esc(fb)+'" loading="lazy"></span>'
+        +'<span class="lib-name">'+esc(it.path.replace('/uploads/',''))+'</span>'
+        +(it.imgbed?'<em class="lib-badge">图床</em>':'')
+        +'</button>';
+    }).join('');
+  }
+  function chooseLibraryImage(idx){
+    var it=LIB.data&&LIB.data[idx];
+    if(!it||!LIB.target)return;
+    var side=currentSide(LIB.target);
+    var value=(side==='imgbed'&&it.imgbed)?it.imgbed:it.path;
+    var field=root.querySelector('[data-path="'+LIB.target+'"]');
+    if(field){field.value=value}
+    setPath(LIB.target,value);
+    updatePreview(LIB.target);
+    refreshToggle(LIB.target);
+    closeLibrary();
+    msg('已选择 '+it.path.replace('/uploads/','')+'（点保存生效）');
+  }
+  /* 弹窗在表单外，选择/关闭事件绑在 document 上 */
+  document.addEventListener('click',function(e){
+    var item=e.target.closest?e.target.closest('[data-lib-idx]'):null;
+    if(item){chooseLibraryImage(parseInt(item.getAttribute('data-lib-idx'),10));return}
+    if(e.target.closest&&e.target.closest('[data-library-close]')){closeLibrary();return}
+    var backdrop=e.target.closest?e.target.closest('[data-library]'):null;
+    if(backdrop&&e.target===backdrop){closeLibrary()}
+  });
+  var libSearch=document.querySelector('[data-library-search]');
+  if(libSearch){libSearch.addEventListener('input',renderLibrary)}
+  /* 库内缩略图加载失败 → 换本地地址 */
+  document.addEventListener('error',function(e){
+    var el=e.target;
+    if(!el||!el.matches||!el.matches('.lib-thumb img'))return;
+    var fb=el.getAttribute('data-fb');
+    if(fb){el.removeAttribute('data-fb');el.src=fb}
+  },true);
 
   /* ================= 保存 ================= */
   var saveBtn=root.querySelector('button[type=submit]');

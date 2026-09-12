@@ -115,6 +115,11 @@ switch (true) {
         json_response(['message' => '密码已修改']);
         break;
 
+    case $path === '/admin/library':
+        require_admin();
+        json_response(yimai_image_library());
+        break;
+
     case $path === '/admin/update-check':
         require_admin();
         json_response(yimai_updater_check());
