@@ -553,7 +553,7 @@ window.YIMAI_IMGBED = {
   map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
 };
 </script>
-<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=6'); ?>"></script>
+<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=7'); ?>"></script>
 <script>
 /* ---------- 在线更新 ---------- */
 (function () {

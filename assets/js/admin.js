@@ -443,6 +443,8 @@
     LIB.target=path;
     var modal=document.querySelector('[data-library]');
     if(!modal)return;
+    var search=modal.querySelector('[data-library-search]');
+    if(search){search.value=''} /* 每次打开清空上次的搜索词 */
     modal.classList.add('open');
     if(LIB.data){renderLibrary()}
     else{
