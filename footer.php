@@ -49,10 +49,8 @@ $icpNumber = $site['icpNumber'] ?? '';
     <div class="icp"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer"><?php echo esc_html($icpNumber); ?></a></div>
   <?php endif; ?>
 </footer>
-<?php wp_footer(); ?>
 <?php
-/* 活动公告弹窗：有启用中的活动时输出；app.js 只在首页自动弹出（每个活动仅一次），
-   其他页面的「活动条」点击也可打开本弹窗。 */
+/* 弹窗 markup 必须在 wp_footer()（app.js 执行点）之前输出，否则 JS 查不到元素、弹窗永不生效 */
 $imgbedFallback = function_exists('yimai_imgbed_fallback_map') ? yimai_imgbed_fallback_map() : [];
 ?>
 <?php if ($imgbedFallback): ?>
@@ -72,11 +70,12 @@ $imgbedFallback = function_exists('yimai_imgbed_fallback_map') ? yimai_imgbed_fa
       <div class="notice-content"><?php echo wp_kses_post(nl2br(esc_html($notice['content'] ?? ''))); ?></div>
       <?php $noticeLink = yimai_notice_link($notice); ?>
       <?php if ($noticeLink): ?>
-        <a class="button primary notice-cta" href="<?php echo esc_url($noticeLink); ?>" data-notice-cta><?php echo esc_html(trim((string) ($notice['linkText'] ?? '')) !== '' ? $notice['linkText'] : '查看详情'); ?></a>
+        <a class="button primary notice-cta" href="<?php echo esc_url($noticeLink); ?>"><?php echo esc_html(trim((string) ($notice['linkText'] ?? '')) !== '' ? $notice['linkText'] : '查看详情'); ?></a>
       <?php endif; ?>
     </div>
   </div>
 </div>
 <?php endif; ?>
+<?php wp_footer(); ?>
 </body>
 </html>
