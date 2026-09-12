@@ -63,6 +63,7 @@
     var btn=document.querySelector('[data-tab="'+name+'"]');
     var title=document.querySelector('[data-main-title]');
     if(btn&&title&&btn.getAttribute('data-title')){title.textContent=btn.getAttribute('data-title')}
+    if(name==='raw'){refreshRaw()}
   }
   tabs.forEach(function(b){b.addEventListener('click',function(){showTab(b.getAttribute('data-tab'))})});
 
@@ -356,14 +357,96 @@
       return;
     }
     var btn=e.target.closest?e.target.closest('[data-src-btn]'):null;
-    if(btn){handleSrcBtn(btn)}
+    if(btn){handleSrcBtn(btn);return}
+    var delImg=e.target.closest?e.target.closest('[data-del-studio-img]'):null;
+    if(delImg){
+      if(confirm('确定删除这张门店空间图吗？')){
+        var di=parseInt(delImg.getAttribute('data-del-studio-img'),10);
+        config.images=config.images||{};
+        if(!Array.isArray(config.images.studioImages)){config.images.studioImages=[]}
+        config.images.studioImages.splice(di,1);
+        renderStudioImages();
+        msg('已删除（未保存）');
+      }
+      return;
+    }
+    var gotoBtn=e.target.closest?e.target.closest('[data-goto-tab]'):null;
+    if(gotoBtn){showTab(gotoBtn.getAttribute('data-goto-tab'))}
   });
 
+  /* ================= 门店空间图（images.studioImages，预约页与空间页共用） ================= */
+  function renderStudioImages(){
+    var host=root.querySelector('[data-studio-images]');
+    if(!host)return;
+    config.images=config.images||{};
+    if(!Array.isArray(config.images.studioImages)){config.images.studioImages=[]}
+    var list=config.images.studioImages;
+    host.innerHTML=list.length?list.map(function(v,idx){
+      return '<div class="item"><div class="item-head"><b>门店空间图 '+(idx+1)+'</b><span class="ops"><button type="button" class="del" data-del-studio-img="'+idx+'">删除</button></span></div>'+imageBlockHtml('images.studioImages.'+idx,v)+'</div>';
+    }).join(''):'<p class="hint" style="margin:0 0 10px">暂未添加，门店卡片会先用「空间光影主图」兜底</p>';
+    host.querySelectorAll('[data-path]').forEach(function(f){
+      f.addEventListener('input',function(){try{syncField(f)}catch(e){msg(e.message)}});
+    });
+  }
+  renderStudioImages();
+  root.querySelectorAll('[data-add-studio-img]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      config.images=config.images||{};
+      if(!Array.isArray(config.images.studioImages)){config.images.studioImages=[]}
+      config.images.studioImages.push('');
+      renderStudioImages();
+      msg('已添加，上传或填写图片地址后保存');
+    });
+  });
+
+  /* ================= 后台外观主题 ================= */
+  var THEME_KEY='yimai_admin_theme';
+  function applyAdminTheme(id){
+    if(id){document.body.setAttribute('data-admin-theme',id)}
+    else{document.body.removeAttribute('data-admin-theme')}
+    try{localStorage.setItem(THEME_KEY,id)}catch(e){}
+    setPath('site.adminTheme',id||'');
+    document.querySelectorAll('[data-admin-theme-set]').forEach(function(c){
+      c.classList.toggle('active',c.getAttribute('data-admin-theme-set')===id);
+    });
+  }
+  (function(){
+    var saved=document.body.getAttribute('data-admin-theme');
+    if(!saved){try{saved=localStorage.getItem(THEME_KEY)}catch(e){}}
+    applyAdminTheme(saved||'paper');
+    document.querySelectorAll('[data-admin-theme-set]').forEach(function(c){
+      c.addEventListener('click',function(){
+        applyAdminTheme(c.getAttribute('data-admin-theme-set'));
+        msg('外观已切换，本浏览器即时生效；点「保存全部更改」后所有设备都用这款');
+      });
+    });
+  })();
+
   /* ================= 保存 ================= */
+  /* 原始 JSON：改动过则保存时以它为准；未改动则在打开该页签时同步当前配置 */
+  var rawBox=root.querySelector('[data-json]');
+  var rawDirty=false;
+  function refreshRaw(){
+    if(rawBox&&!rawDirty){rawBox.value=JSON.stringify(config,null,2)}
+  }
+  if(rawBox){
+    rawBox.addEventListener('input',function(){
+      rawDirty=true;
+      try{JSON.parse(rawBox.value);rawBox.classList.remove('bad')}
+      catch(e){rawBox.classList.add('bad')}
+    });
+  }
   var saveBtn=root.querySelector('button[type=submit]');
   root.addEventListener('submit',function(event){
     event.preventDefault();
-    try{syncAll()}catch(e){msg(e.message);return}
+    try{
+      if(rawBox&&rawDirty){
+        config=JSON.parse(rawBox.value);
+        hidden.value=JSON.stringify(config,null,2);
+      }else{
+        syncAll();
+      }
+    }catch(e){msg('原始 JSON 格式错误，请修正后再保存');return}
     var fd=new FormData(root);
     msg('保存中...');
     fetch('/admin/save',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){

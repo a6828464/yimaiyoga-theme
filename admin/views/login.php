@@ -14,10 +14,11 @@ $theme_uri = get_template_directory_uri();
   body{background:var(--color-linen)}
   .admin-login{min-height:100vh;display:grid;place-items:center;padding:2rem}
   .admin-login form{width:min(440px,100%);background:var(--color-pearl);padding:3rem;box-shadow:0 18px 55px rgb(var(--color-forest-rgb)/.08)}
-  .admin-login h1{font-family:Georgia,serif;font-size:2.8rem;color:var(--color-forest)}
-  .admin-login input{width:100%;border:0;border-bottom:1px solid rgb(var(--color-forest-rgb)/.16);background:transparent;padding:1rem .2rem;outline:none;margin-top:.5rem}
+  .admin-login h1{font-family:Georgia,serif;font-size:clamp(1.9rem,6.5vw,2.8rem);color:var(--color-forest);white-space:nowrap}
+  .admin-login input{width:100%;border:0;border-bottom:1px solid rgb(var(--color-forest-rgb)/.16);background:transparent;padding:1rem .2rem;outline:none;margin-top:.5rem;font-size:16px}
   .admin-login .button{margin-top:1.5rem}
   .admin-error{color:var(--color-clay);text-align:center;margin-top:1rem}
+  @media(max-width:480px){.admin-login{padding:1.25rem}.admin-login form{padding:2.25rem 1.5rem}}
 </style>
 </head>
 <body class="admin-body">

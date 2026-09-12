@@ -7,12 +7,22 @@ $imgbedMap = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
 $imgbedDomain = function_exists('yimai_imgbed_config') ? (yimai_imgbed_config()['domain'] ?? '') : '';
 $uploadTarget = $config['site']['uploadTarget'] ?? 'imgbed';
 $noticeEnabled = $config['announcements']['enabled'] ?? true;
+$adminTheme = (string) ($config['site']['adminTheme'] ?? '');
+/* 后台外观主题（与下方 CSS 变量一一对应） */
+$adminThemes = [
+    'paper' => ['name' => '宣纸 · 暖白', 'desc' => '默认 · 米白纸感', 'sw' => ['#f7f5f0', '#ffffff', '#a9795f', '#1d241f']],
+    'inknight' => ['name' => '墨夜 · 深色', 'desc' => '护眼暗色台面', 'sw' => ['#191a17', '#222320', '#c9926e', '#e9e5da']],
+    'celadon' => ['name' => '青瓷 · 雅绿', 'desc' => '清淡东方绿', 'sw' => ['#edf2ed', '#fbfdfb', '#47806a', '#24352c']],
+    'terra' => ['name' => '陶土 · 暖橘', 'desc' => '赤陶暖调', 'sw' => ['#f6efe8', '#fffcf9', '#b0623c', '#372820']],
+    'dusk' => ['name' => '黛蓝 · 雾蓝', 'desc' => '沉静蓝灰', 'sw' => ['#eef0f5', '#fcfdff', '#4c6a9e', '#232a3a']],
+];
 /* 侧边栏：分组 => [面板 => 标题] */
 $navGroups = [
     '站点' => [
         'site' => '基础与 SEO',
         'images' => '图片管理',
         'notice' => '活动公告',
+        'appearance' => '外观主题',
     ],
     '内容' => [
         'copy' => '页面文案',
@@ -31,26 +41,50 @@ $navGroups = [
         'raw' => '原始 JSON',
     ],
 ];
-$panelTitles = [];
-foreach ($navGroups as $items) {
-    foreach ($items as $k => $v) {
-        $panelTitles[$k] = $v;
-    }
-}
 ?><!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>网站内容后台 · 一麦瑜伽</title>
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/app.css'); ?>">
 <style>
-:root{--bd:#e4e0d8;--bg:#f7f5f0;--card:#fff;--ink:#1d241f;--mut:#8a897f;--clay:#a9795f;--line:rgb(29 36 31/.10)}
+/* ---------- 主题变量（默认=宣纸；其余外观靠 body[data-admin-theme] 覆盖） ---------- */
+body{
+  --bg:#f7f5f0;--card:#ffffff;--ink:#1d241f;--mut:#8a897f;--clay:#a9795f;
+  --line:rgb(29 36 31/.10);--side:#fbfaf7;--input:#fbfaf7;--item:#fdfcfa;
+  --bar:rgba(255,255,255,.94);--hover:rgb(29 36 31/.05);
+  --active-bg:#1d241f;--active-fg:#ffffff;--imgbg:#edece8;
+}
+body[data-admin-theme="inknight"]{
+  --bg:#191a17;--card:#222320;--ink:#e9e5da;--mut:#98948a;--clay:#c9926e;
+  --line:rgb(233 229 218/.13);--side:#1f201c;--input:#292a25;--item:#26271f;
+  --bar:rgba(25,26,23,.92);--hover:rgb(233 229 218/.07);
+  --active-bg:#e9e5da;--active-fg:#191a17;--imgbg:#2c2d27;
+}
+body[data-admin-theme="celadon"]{
+  --bg:#edf2ed;--card:#fbfdfb;--ink:#24352c;--mut:#7e9086;--clay:#47806a;
+  --line:rgb(36 53 44/.11);--side:#f3f8f3;--input:#f5faf6;--item:#f6fbf7;
+  --bar:rgba(251,253,251,.94);--hover:rgb(36 53 44/.05);
+  --active-bg:#2f5e48;--active-fg:#ffffff;--imgbg:#e7efe8;
+}
+body[data-admin-theme="terra"]{
+  --bg:#f6efe8;--card:#fffcf9;--ink:#372820;--mut:#99836f;--clay:#b0623c;
+  --line:rgb(55 40 32/.10);--side:#faf2ea;--input:#faf4ec;--item:#fdf7f0;
+  --bar:rgba(255,252,249,.94);--hover:rgb(55 40 32/.05);
+  --active-bg:#a9542f;--active-fg:#ffffff;--imgbg:#f0e4d8;
+}
+body[data-admin-theme="dusk"]{
+  --bg:#eef0f5;--card:#fcfdff;--ink:#232a3a;--mut:#7e879b;--clay:#4c6a9e;
+  --line:rgb(35 42 58/.11);--side:#f3f5fa;--input:#f5f7fc;--item:#f6f8fd;
+  --bar:rgba(252,253,255,.94);--hover:rgb(35 42 58/.05);
+  --active-bg:#2f4468;--active-fg:#ffffff;--imgbg:#e8ebf2;
+}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif;padding-bottom:120px}
 .shell{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
 /* ---------- 左侧边栏 ---------- */
-.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:#fbfaf7;border-right:1px solid var(--line)}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line)}
 .side-head{padding:20px 18px 10px}
 .side-brand{font-size:16px;font-weight:700;letter-spacing:.05em}
 .side-brand span{font-weight:400;font-size:11px;color:var(--mut);margin-left:6px}
@@ -58,15 +92,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","
 .side-nav{flex:1;overflow-y:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:2px}
 .side-group{font-size:10px;letter-spacing:.2em;color:var(--mut);margin:14px 8px 6px}
 .side-nav button{display:flex;align-items:center;border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--ink);cursor:pointer;transition:.15s}
-.side-nav button:hover{background:rgb(29 36 31/.05)}
-.side-nav button.active{background:var(--ink);color:#fff}
+.side-nav button:hover{background:var(--hover)}
+.side-nav button.active{background:var(--active-bg);color:var(--active-fg)}
 .side-dot{width:7px;height:7px;border-radius:50%;background:#d05a3a;display:inline-block;margin-left:auto}
 .side-foot{border-top:1px solid var(--line);padding:12px 18px;display:flex;gap:16px;font-size:12px}
 .side-foot a{color:var(--mut);text-decoration:none}
 .side-foot a:hover{color:var(--ink)}
 /* ---------- 右侧主区 ---------- */
 .main{min-width:0}
-.main-top{position:sticky;top:0;z-index:20;background:rgba(247,245,240,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:baseline;gap:12px}
+.main-top{position:sticky;top:0;z-index:20;background:var(--bar);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:baseline;gap:12px}
 .main-top h2{margin:0;font-size:16px;letter-spacing:.04em}
 .main-top .sub{font-size:12px;color:var(--mut)}
 .container{max-width:1080px;margin:auto;padding:20px 24px}
@@ -77,68 +111,95 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","
 .card .hint{font-size:12px;color:var(--mut);margin-top:6px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 label{display:grid;gap:5px;font-size:12px;color:var(--mut)}
-input[type=text],input[type=url],input[type=password],select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;background:#fbfaf7;outline:none;color:var(--ink);font-family:inherit}
+input[type=text],input[type=url],input[type=password],select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;background:var(--input);outline:none;color:var(--ink);font-family:inherit}
 textarea{resize:vertical;min-height:64px}
 input:focus,textarea:focus,select:focus{border-color:var(--clay)}
-.item{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:#fdfcfa;position:relative}
+.item{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--item);position:relative}
 .item-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .item-head b{font-size:13px}
 .item-head .ops{display:flex;gap:8px}
-.item-head .del,.item-head .mini{border:1px solid rgb(169 121 95/.4);color:var(--clay);background:transparent;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer}
-.item-head .mini{border-color:var(--line);color:var(--mut)}
-.item-head .del:hover,.item-head .mini:hover{background:#faf0ea}
+.item-head .del,.item-head .mini{border:1px solid var(--line);color:var(--clay);background:transparent;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer}
+.item-head .mini{color:var(--mut)}
+.item-head .del:hover,.item-head .mini:hover{background:var(--hover)}
 .add-btn{border:1px dashed var(--clay);color:var(--clay);background:transparent;border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;width:100%}
-.add-btn:hover{background:#faf0ea}
-.img-preview{width:100%;height:120px;border-radius:8px;overflow:hidden;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut);margin-bottom:8px;border:1px solid var(--line)}
+.add-btn:hover{background:var(--hover)}
+.img-preview{width:100%;height:120px;border-radius:8px;overflow:hidden;background:var(--imgbg);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut);margin-bottom:8px;border:1px solid var(--line)}
 .img-preview img{width:100%;height:100%;object-fit:cover}
-.file-row{display:flex;gap:8px;align-items:center}
-.file-row input[type=file]{font-size:12px}
+.file-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.file-row input[type=file]{font-size:12px;max-width:100%}
 .upload-btn{border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;background:var(--card);color:var(--ink)}
+.goto-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:12px;cursor:pointer;background:var(--card);color:var(--ink);margin:6px 8px 0 0}
+.goto-btn:hover{border-color:var(--clay);color:var(--clay)}
 /* 本地 / 图床切换 */
 .src-toggle{display:flex;align-items:center;margin:2px 0 8px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content;max-width:100%}
 .src-toggle button{border:0;background:transparent;padding:6px 14px;font-size:12px;color:var(--mut);cursor:pointer;white-space:nowrap}
-.src-toggle button.active{background:var(--ink);color:#fff}
+.src-toggle button.active{background:var(--active-bg);color:var(--active-fg)}
 .src-hint{font-size:11px;color:var(--mut);padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .switch{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);cursor:pointer;font-weight:600}
 .switch input{width:18px;height:18px;accent-color:var(--clay)}
-.savebar{position:fixed;left:236px;right:0;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:12px 20px;display:flex;justify-content:center;align-items:center;gap:14px;z-index:30}
+.savebar{position:fixed;left:236px;right:0;bottom:0;background:var(--bar);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:12px 20px;padding-bottom:calc(12px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:14px;z-index:30}
 .savebar .btn{border:0;border-radius:999px;padding:12px 34px;font-size:14px;cursor:pointer;font-weight:600}
-.savebar .btn.primary{background:var(--ink);color:#fff}
+.savebar .btn.primary{background:var(--active-bg);color:var(--active-fg)}
 .savebar .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .savebar .msg{font-size:13px;color:var(--clay)}
-.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0;background:#fbfaf7}
+.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0;background:var(--input)}
 .tag .x{cursor:pointer;color:var(--clay);font-weight:700}
-.json-wrap{font-family:Consolas,monospace;font-size:12px;min-height:300px;background:#1d241f;color:#e8e4da;border-radius:10px;padding:14px;border:0;width:100%}
+.json-wrap{font-family:Consolas,monospace;font-size:12px;min-height:300px;background:#1d241f;color:#e8e4da;border:1px solid var(--line);border-radius:10px;padding:14px;width:100%}
+.json-wrap.bad{border-color:#c0392b}
 /* 更新日志 */
-.log-entry{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fdfcfa}
-.log-entry.new{border-color:rgb(169 121 95/.55);background:#fdf7f3}
+.log-entry{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--item)}
+.log-entry.new{border-color:var(--clay);background:var(--item)}
 .log-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .log-head b{font-size:13px}
 .log-date{font-size:11px;color:var(--mut)}
 .log-badge{font-style:normal;font-size:10px;background:var(--clay);color:#fff;border-radius:999px;padding:2px 8px}
 .log-entry ul{margin:0;padding-left:18px;font-size:12px;color:var(--mut);line-height:1.9}
+/* 外观主题 */
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.theme-card{display:grid;gap:5px;justify-items:start;border:1px solid var(--line);background:var(--item);border-radius:12px;padding:14px;cursor:pointer;text-align:left}
+.theme-card.active{border-color:var(--clay);box-shadow:0 0 0 1px var(--clay) inset}
+.theme-card b{font-size:13px;color:var(--ink)}
+.theme-card span{font-size:11px;color:var(--mut)}
+.theme-swatch{display:flex;gap:5px;margin-bottom:2px}
+.theme-swatch i{width:18px;height:18px;border-radius:50%;border:1px solid var(--line)}
+/* ---------- 手机端 ---------- */
 @media(max-width:880px){
+  body{padding-bottom:96px}
   .shell{display:block}
   .side{position:sticky;top:0;z-index:40;height:auto;border-right:0;border-bottom:1px solid var(--line);display:block}
-  .side-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
-  .side-nav{flex-direction:row;overflow-x:auto;padding:8px 12px;gap:6px;scrollbar-width:none}
+  .side-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 2px}
+  .side-brand{font-size:15px}
+  .side-ver{margin-top:2px}
+  .side-nav{flex-direction:row;overflow-x:auto;padding:8px 12px;gap:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .side-nav::-webkit-scrollbar{display:none}
   .side-group{display:none}
-  .side-nav button{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12px;background:var(--card)}
-  .side-nav button.active{border-color:var(--ink)}
+  .side-nav button{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:8px 15px;font-size:12.5px;background:var(--card);flex:none}
+  .side-nav button.active{border-color:var(--clay);background:var(--active-bg);color:var(--active-fg)}
   .side-foot{display:none}
-  .savebar{left:0}
+  .main-top{padding:12px 16px}
+  .main-top .sub{display:none}
+  .container{padding:14px 14px 20px}
+  .card{padding:16px;border-radius:12px}
   .grid2{grid-template-columns:1fr}
+  .item{padding:12px}
+  .img-preview{height:110px}
+  .json-wrap{min-height:220px;font-size:11px}
+  .savebar{left:0;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom));gap:10px}
+  .savebar .btn{flex:1;padding:12px 10px;font-size:13.5px}
+  .savebar .btn.primary{max-width:60%}
+  .savebar .msg{font-size:12px}
 }
 </style>
 </head>
-<body>
+<body<?php echo $adminTheme !== '' ? ' data-admin-theme="' . esc_attr($adminTheme) . '"' : ''; ?>>
+<script>(function(){try{var t=localStorage.getItem('yimai_admin_theme');if(t){document.body.setAttribute('data-admin-theme',t)}}catch(e){}})();</script>
 
 <div class="shell">
 
 <aside class="side">
   <div class="side-head">
     <div class="side-brand">一麦瑜伽<span>内容后台</span></div>
-    <div class="side-ver">主题版本 v<?php echo h(YIMAI_VERSION); ?> · 保存后前台即时生效</div>
+    <div class="side-ver">主题版本 v<?php echo h(YIMAI_VERSION); ?></div>
   </div>
   <nav class="side-nav">
     <?php foreach ($navGroups as $group => $items): ?>
@@ -157,7 +218,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <div class="main">
 <header class="main-top">
   <h2 data-main-title>基础与 SEO</h2>
-  <span class="sub">一麦瑜伽官网 · 一麦品牌部</span>
+  <span class="sub">一麦瑜伽官网 · 保存后前台即时生效</span>
 </header>
 
 <main class="container">
@@ -169,17 +230,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <section class="panel active" data-panel="site">
   <div class="card">
     <h3>品牌信息</h3>
+    <p class="hint" style="margin:-6px 0 12px">品牌 Logo / Favicon / 公众号二维码等图片请到左侧「图片管理」上传维护。</p>
     <div class="grid2">
       <label>品牌标识（文字）<input data-path="site.brand" value="<?php echo h($config['site']['brand'] ?? ''); ?>"><span class="hint">未上传 Logo 图片时，导航显示这段文字</span></label>
-      <?php admin_image_field('site.logo', '品牌 Logo 图片（可选，上传后优先显示）', $config['site']['logo'] ?? '', '建议透明底 PNG；「图床加速」需先在下方填写图床地址'); ?>
-      <label>Logo 显示大小（滑块实时预览，数字越小图越小）
-        <input type="range" min="4" max="60" step="1" data-path="site.logoHeight" data-range="site.logoHeight" value="<?php echo h($config['site']['logoHeight'] ?? 13); ?>" style="width:100%;margin:6px 0">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <input type="number" min="4" max="60" step="1" data-path="site.logoHeight" data-number="site.logoHeight" value="<?php echo h($config['site']['logoHeight'] ?? 13); ?>" style="width:80px">
-          <span style="font-size:11px;color:var(--mut)">px · 建议 8~16</span>
-        </div>
-        <span class="hint">调滑块立即预览下方 logo 大小，保存后前台生效</span>
-      </label>
       <label>网站名称<input data-path="site.name" value="<?php echo h($config['site']['name'] ?? ''); ?>"></label>
       <label>网站网址<input data-path="site.url" value="<?php echo h($config['site']['url'] ?? ''); ?>"></label>
       <label>网站标题（SEO）<input data-path="site.title" value="<?php echo h($config['site']['title'] ?? ''); ?>"></label>
@@ -193,16 +246,18 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
   <div class="card">
     <h3>品牌 Logo 实时预览</h3>
-    <div style="background:var(--color-oat);border:1px dashed var(--line);border-radius:10px;padding:18px;display:flex;align-items:center;justify-content:center">
+    <div style="border:1px dashed var(--line);border-radius:10px;padding:18px;display:flex;align-items:center;justify-content:center">
       <img data-logo-live alt="Logo 实时预览" style="height:<?php echo esc_attr((int) ($config['site']['logoHeight'] ?? 13)); ?>px;width:auto;display:block;object-fit:contain">
     </div>
-    <p class="hint">这是导航栏 logo 的实际大小，调上方滑块实时变化</p>
-  </div>
-  <div class="card">
-    <h3>品牌图片</h3>
-    <div class="grid2">
-      <?php admin_image_field('site.favicon', 'Favicon 图标', $config['site']['favicon'] ?? ''); ?>
-      <?php admin_image_field('site.wechatQr', '公众号二维码', $config['site']['wechatQr'] ?? ''); ?>
+    <p class="hint">这是导航栏 logo 的实际大小，调上方滑块实时变化；上传或更换 Logo 图片请到「图片管理」</p>
+    <div style="margin-top:10px">
+      <label>Logo 显示大小（滑块实时预览，数字越小图越小）
+        <input type="range" min="4" max="60" step="1" data-path="site.logoHeight" data-range="site.logoHeight" value="<?php echo h($config['site']['logoHeight'] ?? 13); ?>" style="width:100%;margin:6px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <input type="number" min="4" max="60" step="1" data-path="site.logoHeight" data-number="site.logoHeight" value="<?php echo h($config['site']['logoHeight'] ?? 13); ?>" style="width:80px">
+          <span style="font-size:11px;color:var(--mut)">px · 建议 8~16</span>
+        </div>
+      </label>
     </div>
   </div>
 </section>
@@ -222,12 +277,41 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     </div>
   </div>
   <div class="card">
-    <h3>页面大图</h3>
+    <h3>品牌图片 <span style="font-weight:400;font-size:12px;color:var(--mut)">（导航 / 浏览器图标 / 页脚）</span></h3>
     <div class="grid2">
-      <?php foreach (['homeHero' => '首页首屏大图', 'homeStudio' => '首页空间图', 'homeStory' => '首页故事图', 'bookingHero' => '预约页顶部图', 'studioHero' => '空间页主图'] as $key => $label): ?>
+      <?php admin_image_field('site.logo', '品牌 Logo', $config['site']['logo'] ?? '', '建议透明底 PNG；显示大小在「基础与SEO」调节'); ?>
+      <?php admin_image_field('site.favicon', 'Favicon 图标', $config['site']['favicon'] ?? '', '浏览器标签页小图标，建议正方形'); ?>
+      <?php admin_image_field('site.wechatQr', '公众号二维码', $config['site']['wechatQr'] ?? '', '显示在网站页脚'); ?>
+    </div>
+  </div>
+  <div class="card">
+    <h3>首页</h3>
+    <div class="grid2">
+      <?php foreach (['homeHero' => '首屏大图', 'homeStudio' => '空间氛围图', 'homeStory' => '空间故事图'] as $key => $label): ?>
         <?php admin_image_field('images.' . $key, $label, $config['images'][$key] ?? ''); ?>
       <?php endforeach; ?>
     </div>
+  </div>
+  <div class="card">
+    <h3>预约页</h3>
+    <div class="grid2">
+      <?php admin_image_field('images.bookingHero', '预约页顶部图', $config['images']['bookingHero'] ?? ''); ?>
+    </div>
+  </div>
+  <div class="card">
+    <h3>空间页 / 门店 <span style="font-weight:400;font-size:12px;color:var(--mut)">（预约页的空间光影区与门店卡片共用）</span></h3>
+    <div class="grid2">
+      <?php admin_image_field('images.studioHero', '空间光影主图', $config['images']['studioHero'] ?? '', '空间页大图 + 预约页光影区；门店图不足时也作为兜底'); ?>
+    </div>
+    <p style="margin:14px 0 8px;font-size:12px;color:var(--mut)">门店空间图（按顺序对应「门店」列表里的门店，显示在空间页与预约页的门店卡片）</p>
+    <div data-studio-images></div>
+    <button type="button" class="add-btn" data-add-studio-img>+ 添加门店空间图</button>
+  </div>
+  <div class="card">
+    <h3>更多图片</h3>
+    <p class="hint" style="margin-top:0">课程主题配图与老师照片在各自的列表页里管理（每一项内可直接上传 / 切换图床）：</p>
+    <button type="button" class="goto-btn" data-goto-tab="themes">去课程主题 →</button>
+    <button type="button" class="goto-btn" data-goto-tab="instructors">去师资管理 →</button>
   </div>
 </section>
 
@@ -243,6 +327,23 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     <p class="hint">多条同时启用时展示<b>最下面一条</b>；填写开始 / 结束日期可定时上下线，到期自动隐藏，无需手动关闭。</p>
     <div data-editor-list="announcements"></div>
     <button type="button" class="add-btn" data-add-item="announcements">+ 添加活动</button>
+  </div>
+</section>
+
+<!-- ===================== 外观主题 ===================== -->
+<section class="panel" data-panel="appearance">
+  <div class="card">
+    <h3>后台外观</h3>
+    <p class="hint" style="margin-top:0">点击即时切换整个后台的配色，当前浏览器会记住你的选择；点「保存全部更改」后所有设备登录都使用这款。</p>
+    <div class="theme-grid">
+      <?php foreach ($adminThemes as $id => $t): ?>
+      <button type="button" class="theme-card" data-admin-theme-set="<?php echo h($id); ?>">
+        <span class="theme-swatch"><?php foreach ($t['sw'] as $c): ?><i style="background:<?php echo h($c); ?>"></i><?php endforeach; ?></span>
+        <b><?php echo h($t['name']); ?></b>
+        <span><?php echo h($t['desc']); ?></span>
+      </button>
+      <?php endforeach; ?>
+    </div>
   </div>
 </section>
 
@@ -264,6 +365,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <section class="panel" data-panel="studios">
   <div class="card">
     <h3>门店列表</h3>
+    <p class="hint">顺序即前台显示顺序；门店空间图在「图片管理 → 空间页 / 门店」里按顺序对应。</p>
     <div data-editor-list="studios"></div>
     <button type="button" class="add-btn" data-add-item="studios">+ 添加门店</button>
   </div>
@@ -371,7 +473,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <section class="panel" data-panel="raw">
   <div class="card">
     <h3>原始配置 JSON <span style="font-weight:400;font-size:12px;color:var(--mut)">（高级用户）</span></h3>
-    <p class="hint">可直接编辑全部配置。保存前自动校验，格式错误不会写入。</p>
+    <p class="hint">打开此页时会自动同步当前全部配置；在此修改并保存后<b>以这里的 JSON 为准</b>（其他页签的改动会被覆盖）。保存前自动校验，格式错误不会写入。</p>
     <textarea class="json-wrap" data-path="__root__" data-json><?php echo h($json); ?></textarea>
   </div>
 </section>
@@ -395,7 +497,7 @@ window.YIMAI_IMGBED = {
   map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
 };
 </script>
-<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=3'); ?>"></script>
+<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=4'); ?>"></script>
 <script>
 /* ---------- 在线更新 ---------- */
 (function () {
@@ -483,7 +585,6 @@ window.YIMAI_IMGBED = {
         elStatus.textContent = data.ok ? '已更新到 v' + (data.version || '') + ' ✓' : (data.message || '更新失败');
         if (data.ok) {
           elLocal.textContent = 'v' + (data.version || '') + '（本次更新）';
-          // 更新成功后刷新版本与更新日志状态
           setTimeout(function () { check(true); }, 1200);
         }
       })
@@ -491,7 +592,6 @@ window.YIMAI_IMGBED = {
       .finally(function () { btnRun.disabled = false; });
   });
 
-  // 进入页面静默拉取一次当前/远端版本与更新日志
   check(true);
 })();
 </script>

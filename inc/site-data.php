@@ -34,6 +34,8 @@ function yimai_site_data(bool $with_db = true): array
             'imgbedAuthCode' => '',
             // 新上传图片默认写入哪种地址：imgbed=图床链接（需已配置图床），local=仅本地
             'uploadTarget' => 'imgbed',
+            // 后台外观主题（paper/inknight/celadon/terra/dusk，空=默认宣纸）
+            'adminTheme' => '',
             'theme' => 'ebony-ivory',
             'customTheme' => [
                 'linen' => '#ffffff',
