@@ -175,7 +175,7 @@ function yimai_finish_upload(string $target, string $mime, string $name): array
             if ($imgbedPath !== null) {
                 yimai_imgbed_remember('/uploads/' . $name, $imgbedPath);
                 $imgbedConfig = yimai_imgbed_config();
-                $imgbedFull = $imgbedConfig['domain'] . '/' . $imgbedPath;
+                $imgbedFull = $imgbedConfig['domain'] . '/' . ltrim($imgbedPath, '/');
             }
         } catch (Throwable $e) {
             // 图床同步失败不影响上传结果
@@ -213,7 +213,7 @@ function yimai_imgbed_sync_existing(string $rel): array
         }
         yimai_imgbed_remember($rel, $imgbedPath);
     }
-    return ['ok' => true, 'imgbed' => $config['domain'] . '/' . $imgbedPath];
+    return ['ok' => true, 'imgbed' => $config['domain'] . '/' . ltrim((string) $imgbedPath, '/')];
 }
 
 /* ---------- 上传（存主题 assets/images/uploads，对应原站 /uploads/） ---------- */
