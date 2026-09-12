@@ -18,6 +18,35 @@
     var fb = window.YIMAI_IMG_FALLBACK[src];
     if (fb) { el.src = fb; }
   }, true);
+  // 活动公告：首页首次进站弹窗（每个活动仅弹一次），活动条点击打开弹窗
+  var notice=document.querySelector('[data-notice-modal]');
+  if(notice){
+    var noticeId=notice.getAttribute('data-notice-id')||'';
+    var SEEN_KEY='yimai_notice_seen';
+    var seenId=function(){try{return localStorage.getItem(SEEN_KEY)}catch(e){return null}};
+    var markSeen=function(){try{localStorage.setItem(SEEN_KEY,noticeId)}catch(e){}};
+    var openNotice=function(){notice.classList.add('open')};
+    var closeNotice=function(mark){notice.classList.remove('open');if(mark!==false){markSeen()}};
+    // 仅首页自动弹出；进入后稍作延迟，避免打断首屏
+    if(document.body.classList.contains('home')&&seenId()!==noticeId){
+      setTimeout(openNotice,800);
+    }
+    notice.addEventListener('click',function(e){if(e.target===notice){closeNotice()}});
+    notice.querySelectorAll('[data-notice-close]').forEach(function(btn){btn.addEventListener('click',function(){closeNotice()})});
+    var cta=notice.querySelector('[data-notice-cta]');
+    if(cta){cta.addEventListener('click',function(){markSeen()})}
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&notice.classList.contains('open')){closeNotice()}});
+  }
+  var strip=document.querySelector('[data-activity-strip]');
+  if(strip&&notice){
+    strip.addEventListener('click',function(e){
+      var href=strip.getAttribute('href');
+      if(!href||href==='#'){
+        e.preventDefault();
+        notice.classList.add('open');
+      }
+    });
+  }
   document.querySelectorAll('[data-booking-form]').forEach(function(form){
     form.addEventListener('submit',function(event){
       event.preventDefault();

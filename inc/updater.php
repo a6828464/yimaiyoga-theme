@@ -84,6 +84,34 @@ function yimai_update_remote_meta(?string &$source_used = null): array
     return [];
 }
 
+/** 解析 CHANGELOG.md 为 [{version,date,notes}]（发布脚本对清单用同一套规则） */
+function yimai_parse_changelog(string $markdown): array
+{
+    $entries = [];
+    $current = null;
+    foreach (preg_split('/\r?\n/', $markdown) as $line) {
+        $line = rtrim($line);
+        if (preg_match('/^##\s+v?([0-9][0-9A-Za-z.\-]*)\s*[·\- ]*\s*(\d{4}-\d{2}-\d{2})?\s*$/', $line, $m)) {
+            if ($current !== null) {
+                $entries[] = $current;
+            }
+            $current = ['version' => $m[1], 'date' => $m[2] ?? '', 'notes' => []];
+        } elseif ($current !== null && preg_match('/^[-*]\s+(.+)$/', $line, $m)) {
+            $current['notes'][] = $m[1];
+        }
+    }
+    if ($current !== null) {
+        $entries[] = $current;
+    }
+    return $entries;
+}
+
+function yimai_local_changelog(): array
+{
+    $file = get_template_directory() . '/CHANGELOG.md';
+    return is_file($file) ? yimai_parse_changelog((string) file_get_contents($file)) : [];
+}
+
 /** 后台「检查更新」入口 */
 function yimai_updater_check(): array
 {
@@ -94,6 +122,7 @@ function yimai_updater_check(): array
             'ok' => false,
             'message' => '无法获取远端版本信息（Gitee / GitHub 均不可达），请稍后重试。',
             'local' => $local,
+            'changelog' => yimai_local_changelog(),
         ];
     }
     return [
@@ -102,6 +131,7 @@ function yimai_updater_check(): array
         'remote' => $remote,
         'source' => $source,
         'up_to_date' => version_compare((string) $remote['version'], (string) $local['version'], '<='),
+        'changelog' => yimai_local_changelog(),
     ];
 }
 
@@ -267,6 +297,24 @@ function yimai_update_migrate(array &$log): void
         $config['site']['favicon'] = '/favicon.png';
         update_option('yimai_site_config', wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), false);
         $log[] = '已修复后台配置中失效的 favicon 路径';
+    }
+
+    // v1.3.0 起图片地址「所见即所得」：把配置中已同步图床的本地路径改写为图床 URL，
+    // 与旧版「自动优先图床」的前台表现保持一致；未同步的图片保持本地路径不动。
+    $map = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
+    $imgbedConfig = function_exists('yimai_imgbed_config') ? yimai_imgbed_config() : [];
+    if ($map !== [] && $imgbedConfig !== [] && is_array($config)) {
+        $changed = false;
+        array_walk_recursive($config, function (&$value) use ($map, $imgbedConfig, &$changed) {
+            if (is_string($value) && isset($map[$value])) {
+                $value = $imgbedConfig['domain'] . '/' . $map[$value];
+                $changed = true;
+            }
+        });
+        if ($changed) {
+            update_option('yimai_site_config', wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), false);
+            $log[] = '已把后台配置中已同步图床的图片改写为图床地址（本地文件仍保留，可随时在后台切回）';
+        }
     }
 }
 

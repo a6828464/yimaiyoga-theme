@@ -32,6 +32,8 @@ function yimai_site_data(): array
             // 图床（后台「基础与SEO」可配置；留空时回退 local-secrets.php，都没有则仅存本地）
             'imgbedDomain' => '',
             'imgbedAuthCode' => '',
+            // 新上传图片默认写入哪种地址：imgbed=图床链接（需已配置图床），local=仅本地
+            'uploadTarget' => 'imgbed',
             'theme' => 'ebony-ivory',
             'customTheme' => [
                 'linen' => '#ffffff',
@@ -542,6 +544,11 @@ function yimai_site_data(): array
                     '教培专属跟练卡 30 节',
                 ],
             ],
+        ],
+        'announcements' => [
+            // 首页弹窗总开关（关闭后首页不弹窗；预约页活动条仍随活动有无显示）
+            'enabled' => true,
+            'items' => [],
         ],
         'training_rights' => [
             '赠送专业瑜伽服 1 套',

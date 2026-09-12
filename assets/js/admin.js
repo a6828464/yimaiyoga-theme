@@ -5,6 +5,11 @@
   var message=root.querySelector('[data-admin-message]');
   if(!hidden){return}
   var config=window.CONFIG||JSON.parse(hidden.value||'{}');
+  var IMGBED=window.YIMAI_IMGBED||{domain:'',map:{}};
+  var REVERSE={};
+  Object.keys(IMGBED.map||{}).forEach(function(local){
+    REVERSE[IMGBED.domain+'/'+IMGBED.map[local]]=local;
+  });
 
   /* ================= 基础工具 ================= */
   function setPath(path,value){
@@ -26,8 +31,28 @@
   function fieldHtml(path,label,type,value,extra){
     var v=value==null?'':value;
     var t=type||'text';
+    if(t==='check'){
+      return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:6px">'+esc(label||'')
+        +'<input type="checkbox" data-path="'+path+'" '+(v?'checked':'')+'></label>';
+    }
     var ta = t==='textarea' ? '<textarea data-path="'+path+'" '+ (extra||'') +'>'+esc(v)+'</textarea>' : '<input type="'+t+'" data-path="'+path+'" value="'+esc(v)+'" '+ (extra||'') +'>';
     return '<label>'+esc(label||'')+ta+'</label>';
+  }
+  /* 列表编辑器的图片字段：预览 + 地址 + 本地/图床切换 + 上传 */
+  function imageBlockHtml(path,value){
+    var v=value==null?'':String(value);
+    var isRemote=/^https?:\/\//i.test(v);
+    var src=v?(v.indexOf('http')===0?v:(window.YIMAI_URI||'')+'/assets/images'+v):'';
+    var html='<div class="img-preview" data-preview="'+path+'" style="height:80px;max-width:220px">'
+      +(src?'<img src="'+esc(src)+'" onerror="this.parentNode.textContent=\'无图片\'">':'无图片')
+      +'</div>';
+    html+='<input type="text" data-path="'+path+'" value="'+esc(v)+'" placeholder="留空无图 / /uploads/… / https://…">';
+    html+='<div class="src-toggle" data-src-toggle="'+path+'">'
+      +'<button type="button" data-src-btn="local" class="'+(isRemote?'':'active')+'">本地</button>'
+      +'<button type="button" data-src-btn="imgbed" class="'+(isRemote?'active':'')+'">图床</button>'
+      +'<span class="src-hint" data-src-hint="'+path+'"></span></div>';
+    html+='<div class="file-row"><input type="file" data-upload-for="'+path+'" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="'+path+'">上传图片</button></div>';
+    return '<div style="margin-top:10px">'+html+'</div>';
   }
 
   /* ================= Tab 切换 ================= */
@@ -35,19 +60,93 @@
   function showTab(name){
     document.querySelectorAll('[data-tab]').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===name)});
     document.querySelectorAll('[data-panel]').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===name)});
+    var btn=document.querySelector('[data-tab="'+name+'"]');
+    var title=document.querySelector('[data-main-title]');
+    if(btn&&title&&btn.getAttribute('data-title')){title.textContent=btn.getAttribute('data-title')}
   }
   tabs.forEach(function(b){b.addEventListener('click',function(){showTab(b.getAttribute('data-tab'))})});
 
   /* ================= 图片预览 ================= */
   function updatePreview(path){
     var box=document.querySelector('[data-preview="'+path+'"]');
-    if(!box)return
-    var v=getPath(path);
+    if(!box)return;
+    var v=String(getPath(path)||'');
     if(v){
-      var url=(String(v).indexOf('http')===0)?v:(window.YIMAI_URI||'')+String(v).replace(/^\//,'');
-      if(window.YIMAI_URI&&String(v).indexOf('/')===0){url=window.YIMAI_URI+'/assets/images'+v}
+      var url=(v.indexOf('http')===0)?v:(window.YIMAI_URI||'')+'/assets/images'+v;
       box.innerHTML='<img src="'+esc(url)+'" onerror="this.parentNode.textContent=\'图片加载失败\'">';
     } else {box.innerHTML='无图片'}
+  }
+
+  /* ================= 本地 / 图床切换 ================= */
+  function srcHint(path,text){
+    var el=root.querySelector('[data-src-hint="'+path+'"]');
+    if(el){el.textContent=text||''}
+  }
+  /* 当前应高亮哪一侧：空字段按上传默认设置 */
+  function currentSide(path){
+    var v=String(getPath(path)||'');
+    if(!v){
+      var def=(config.site&&config.site.uploadTarget)||'imgbed';
+      return def==='local'?'local':'imgbed';
+    }
+    return /^https?:\/\//i.test(v)?'imgbed':'local';
+  }
+  function refreshToggle(path){
+    var box=root.querySelector('[data-src-toggle="'+path+'"]');
+    if(!box)return;
+    var side=currentSide(path);
+    box.querySelectorAll('[data-src-btn]').forEach(function(b){
+      b.classList.toggle('active',b.getAttribute('data-src-btn')===side);
+    });
+  }
+  function rememberImgbed(localPath,imgbedUrl){
+    if(!IMGBED.domain||imgbedUrl.indexOf(IMGBED.domain)!==0)return;
+    var p=imgbedUrl.slice(IMGBED.domain.length+1);
+    IMGBED.map[localPath]=p;
+    REVERSE[imgbedUrl]=localPath;
+  }
+  function handleSrcBtn(btn){
+    var box=btn.closest('[data-src-toggle]');
+    if(!box)return;
+    var path=box.getAttribute('data-src-toggle');
+    var side=btn.getAttribute('data-src-btn');
+    var field=root.querySelector('[data-path="'+path+'"]');
+    var value=String(getPath(path)||'');
+    function applyValue(v,tip){
+      if(field){field.value=v}
+      setPath(path,v);
+      updatePreview(path);
+      refreshToggle(path);
+      srcHint(path,tip||'');
+    }
+    if(side==='imgbed'){
+      if(!value){srcHint(path,'请先上传或填写本地图片');return}
+      if(/^https?:\/\//i.test(value)){
+        if(IMGBED.domain&&value.indexOf(IMGBED.domain)===0){return}
+        srcHint(path,'这是外部图片链接，与图床无关');return;
+      }
+      if(!IMGBED.domain){srcHint(path,'请先在「基础与SEO」填写图床地址');return}
+      var mapped=IMGBED.map[value];
+      if(mapped){applyValue(IMGBED.domain+'/'+mapped,'已切换（保存后生效）');return}
+      srcHint(path,'正在同步图床…');
+      var fd=new FormData();
+      fd.append('csrf_token',window.CSRF_TOKEN||'');
+      fd.append('path',value);
+      fetch('/admin/imgbed-sync',{method:'POST',body:fd})
+        .then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})})
+        .then(function(data){
+          rememberImgbed(value,data.imgbed);
+          applyValue(data.imgbed,'已切换（保存后生效）');
+          msg('已同步图床并切换地址（点保存生效）');
+        })
+        .catch(function(error){srcHint(path,'');msg((error&&error.message)||'同步图床失败')});
+      return;
+    }
+    /* 切回本地 */
+    if(!value||!/^https?:\/\//i.test(value)){return}
+    var local=REVERSE[value];
+    if(local){applyValue(local,'已切换（保存后生效）');msg('已切换到本地地址（点保存生效）')}
+    else{srcHint(path,'该地址没有对应的本地文件')}
   }
 
   /* ================= 字段同步 ================= */
@@ -55,11 +154,13 @@
     var path=field.getAttribute('data-path');
     if(!path||path==='__root__'){return}
     var value=field.value;
+    if(field.getAttribute('type')==='checkbox'){value=field.checked}
     if(field.hasAttribute('data-array-lines')){value=value.split('\n').map(function(i){return i.trim()}).filter(Boolean)}
     if(field.hasAttribute('data-json')){try{value=JSON.parse(value)}catch(e){throw new Error('JSON 格式错误：'+path)}}
     setPath(path,value);
     var p=path.split('.');
     if(p[0]==='site'||p[0]==='images'){updatePreview(path)}
+    if(root.querySelector('[data-src-toggle="'+path+'"]')){refreshToggle(path)}
   }
   function syncAll(){
     root.querySelectorAll('[data-path]').forEach(function(f){if(f.getAttribute('data-path')==='__root__'){return}syncField(f)});
@@ -70,32 +171,49 @@
   var SCHEMAS={
     studios:{fields:[['name','门店名称','text'],['area','面积','text'],['address','地址','text'],['phone','电话','text']]},
     memberships:{fields:[['name','方案名称','text'],['label','副标题','text'],['feature','特点说明','textarea'],['accent','标签','text']]},
-    courseThemes:{fields:[['title','主题名称','text'],['type','类型','text'],['effect','功效','textarea'],['suited','适合人群','textarea'],['image','图片路径','text']]},
+    courseThemes:{fields:[['title','主题名称','text'],['type','类型','text'],['effect','功效','textarea'],['suited','适合人群','textarea'],['image','课程图片','image']]},
     classPaths:{fields:[['title','路径名称','text'],['description','说明','textarea']]},
-    instructors:{fields:[['name','姓名','text'],['role','职位','text'],['years','年限','text'],['focus','擅长','text'],['image','照片路径','text'],['summary','简介','textarea']]},
+    instructors:{fields:[['name','姓名','text'],['role','职位','text'],['years','年限','text'],['focus','擅长','text'],['image','照片','image'],['summary','简介','textarea']]},
     faqs:{fields:[['q','问题','text'],['a','回答','textarea']]},
     training_programs:{fields:[['name','方案名称','text'],['price','价格','text'],['label','标签','text'],['description','说明','textarea']]},
-    nav_items:{fields:[['label','菜单文字','text'],['href','链接','text']]}
+    nav_items:{fields:[['label','菜单文字','text'],['href','链接','text']]},
+    announcements:{fields:[['title','活动标题','text'],['content','活动内容','textarea'],['image','配图（可选）','image'],['link','跳转链接（可选，如 /booking 或完整网址）','text'],['linkText','按钮文字（默认「查看详情」）','text'],['start','开始日期（可选）','date'],['end','结束日期（可选）','date'],['active','启用','check']]}
   };
   var TAG_FIELDS={instructors:['credentials','specialties'],classPaths:['tags'],training_programs:['points']};
+  /* announcements 配置结构是 announcements.items */
+  var LIST_ALIASES={announcements:'announcements.items'};
+  function listParts(key){return (LIST_ALIASES[key]||key).split('.')}
+  function getList(key){
+    var t=config,p=listParts(key);
+    for(var i=0;i<p.length;i++){if(t==null||typeof t!=='object')return null;t=t[p[i]]}
+    return t&&typeof t==='object'?t:null;
+  }
+  function setList(key,arr){
+    var p=listParts(key),t=config;
+    for(var i=0;i<p.length-1;i++){if(!t[p[i]]||typeof t[p[i]]!=='object'){t[p[i]]={}}t=t[p[i]]}
+    t[p[p.length-1]]=arr;
+  }
 
   function renderList(key){
     var host=root.querySelector('[data-editor-list="'+key+'"]');
     if(!host)return
-    var list=config[key]||[];
+    var list=getList(key)||[];
     var schema=SCHEMAS[key];
     if(!schema){return}
     host.innerHTML=list.map(function(item,idx){
       var name=item.name||item.label||item.title||item.q||('项目 '+(idx+1));
       var html='<div class="item" data-idx="'+idx+'">';
-      html+='<div class="item-head"><b>'+esc(name)+'</b><button type="button" class="del" data-del-item="'+key+'" data-idx="'+idx+'">删除</button></div>';
+      html+='<div class="item-head"><b>'+esc(name)+'</b><span class="ops">';
+      if(key==='announcements'){html+='<button type="button" class="mini" data-bump-id="announcements.'+idx+'" title="更换活动编号，让访客下次进首页重新弹一次">重新弹出</button>'}
+      html+='<button type="button" class="del" data-del-item="'+key+'" data-idx="'+idx+'">删除</button></span></div>';
       html+='<div class="grid2">';
       schema.fields.forEach(function(f){
         var path=key+'.'+idx+'.'+f[0];
         var v=item[f[0]];
         if(key==='faqs'){path=key+'.'+idx+'.'+(f[0]==='q'?'0':'1');v=item[f[0]==='q'?0:1]}
-        if(f[2]==='textarea'){html+=fieldHtml(path,f[1],'textarea',v,'rows="3"')}
-        else{html+=fieldHtml(path,f[1],'text',v)}
+        if(f[2]==='image'){html+=imageBlockHtml(path,v)}
+        else if(f[2]==='textarea'){html+=fieldHtml(path,f[1],'textarea',v,'rows="3"')}
+        else{html+=fieldHtml(path,f[1],f[2]||'text',v)}
       });
       html+='</div>';
       // tags 编辑器
@@ -107,10 +225,6 @@
           html+='<input type="text" data-tag-input="'+key+'.'+idx+'.'+tf+'" placeholder="输入后回车添加" style="margin-top:6px"></div>';
         });
       }
-      // 图片预览（师资/课程主题）
-      if(item.image){
-        html+='<div style="margin-top:10px"><span style="font-size:12px;color:var(--mut)">当前图片</span><div class="img-preview" style="height:80px;max-width:220px"><img src="'+(window.YIMAI_URI?window.YIMAI_URI+'/assets/images'+item.image:item.image)+'" onerror="this.parentNode.textContent=\'无图片\'"></div></div>';
-      }
       html+='</div>';
       return html;
     }).join('');
@@ -120,7 +234,9 @@
         var k=btn.getAttribute('data-del-item');
         var idx=parseInt(btn.getAttribute('data-idx'),10);
         if(!confirm('确定删除这项吗？'))return
-        config[k].splice(idx,1);
+        var arr=getList(k)||[];
+        arr.splice(idx,1);
+        setList(k,arr);
         renderList(k);
         msg('已删除（未保存）');
       });
@@ -130,9 +246,10 @@
       x.addEventListener('click',function(){
         var p=x.getAttribute('data-tag-del').split('.');
         var k=p[0],idx=parseInt(p[1],10),tf=p.slice(2).join('.');
-        var arr=config[k][idx][tf]||[];
+        var arr=getList(k)||[];
         var t=x.getAttribute('data-tag');
-        config[k][idx][tf]=arr.filter(function(i){return i!==t});
+        arr[idx][tf]=(arr[idx][tf]||[]).filter(function(i){return i!==t});
+        setList(k,arr);
         renderList(k);
       });
     });
@@ -145,15 +262,17 @@
         var k=p[0],idx=parseInt(p[1],10),tf=p.slice(2).join('.');
         var v=inp.value.trim();
         if(!v)return
-        if(!config[k][idx][tf]){config[k][idx][tf]=[]}
-        config[k][idx][tf].push(v);
-        inp.value='';
+        var arr=getList(k)||[];
+        if(!arr[idx][tf]){arr[idx][tf]=[]}
+        arr[idx][tf].push(v);
+        setList(k,arr);
         renderList(k);
       });
     });
     // 字段输入即时同步到 config
     host.querySelectorAll('[data-path]').forEach(function(f){
       f.addEventListener('input',function(){try{syncField(f)}catch(e){msg(e.message)}});
+      if(f.getAttribute('type')==='checkbox'){f.addEventListener('change',function(){try{syncField(f)}catch(e){msg(e.message)}})}
     });
   }
 
@@ -164,22 +283,42 @@
   root.querySelectorAll('[data-add-item]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var key=btn.getAttribute('data-add-item');
-      if(!config[key]){config[key]=[]}
+      var arr=getList(key)||[];
       var blank={};
       SCHEMAS[key].fields.forEach(function(f){blank[f[0]]=''});
-      config[key].push(blank);
+      if(key==='announcements'){
+        blank.id='act-'+Date.now();
+        blank.active=true;
+        blank.linkText='查看详情';
+      }
+      arr.push(blank);
+      setList(key,arr);
       renderList(key);
       msg('已添加空白项（填完保存）');
     });
+  });
+
+  // 重新弹出（更换公告编号）
+  root.addEventListener('click',function(e){
+    var bump=e.target.closest?e.target.closest('[data-bump-id]'):null;
+    if(!bump)return;
+    var idx=parseInt(bump.getAttribute('data-bump-id').split('.').pop(),10);
+    var arr=getList('announcements')||[];
+    if(arr[idx]){
+      arr[idx].id='act-'+Date.now();
+      renderList('announcements');
+      msg('活动编号已更换，访客下次进首页会重新弹窗（点保存生效）');
+    }
   });
 
   /* ================= 普通字段即时同步 ================= */
   root.querySelectorAll('[data-path]').forEach(function(field){
     if(field.getAttribute('data-path')==='__root__'){return}
     field.addEventListener('input',function(){try{syncField(field)}catch(e){msg(e.message)}});
+    if(field.getAttribute('type')==='checkbox'){field.addEventListener('change',function(){try{syncField(field)}catch(e){msg(e.message)}})}
   });
 
-  /* ================= 上传 ================= */
+  /* ================= 上传（事件委托，静态字段与列表字段通用） ================= */
   function doUpload(input,path){
     var file=input.files&&input.files[0];
     if(!file){return}
@@ -188,25 +327,36 @@
     fd.append('file',file);
     fd.append('field',path||'');
     msg('上传中...');
+    var side=currentSide(path);
     fetch('/admin/upload',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){
+      var value=data.path;
+      if(side==='imgbed'&&data.imgbed){
+        value=data.imgbed;
+        rememberImgbed(data.path,data.imgbed);
+      }
       var field=root.querySelector('[data-path="'+path+'"]');
-      if(field){field.value=data.path;syncField(field)}
-      renderList('instructors');renderList('courseThemes');
-      msg('已上传：'+data.path+'（点保存生效）');
+      if(field){field.value=value}
+      setPath(path,value);
+      updatePreview(path);
+      refreshToggle(path);
+      input.value='';
+      msg('已上传：'+value+'（点保存生效）');
     }).catch(function(error){msg(error.message||'上传失败')});
   }
-  root.querySelectorAll('[data-upload-for]').forEach(function(input){
-    input.addEventListener('change',function(){
-      var path=input.getAttribute('data-upload-for');
-      doUpload(input,path);
-    });
+  root.addEventListener('change',function(e){
+    var t=e.target;
+    if(t&&t.matches&&t.matches('[data-upload-for]')){doUpload(t,t.getAttribute('data-upload-for'))}
   });
-  root.querySelectorAll('[data-upload-trigger]').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var path=btn.getAttribute('data-upload-trigger');
+  root.addEventListener('click',function(e){
+    var trig=e.target.closest?e.target.closest('[data-upload-trigger]'):null;
+    if(trig){
+      var path=trig.getAttribute('data-upload-trigger');
       var fileInput=root.querySelector('[data-upload-for="'+path+'"]');
       if(fileInput){fileInput.click()}
-    });
+      return;
+    }
+    var btn=e.target.closest?e.target.closest('[data-src-btn]'):null;
+    if(btn){handleSrcBtn(btn)}
   });
 
   /* ================= 保存 ================= */

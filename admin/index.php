@@ -83,7 +83,18 @@ switch (true) {
         if (!$result['ok']) {
             json_response(['message' => $result['message']], 400);
         }
-        json_response(['path' => $result['path']]);
+        json_response(['path' => $result['path'], 'imgbed' => $result['imgbed'] ?? null]);
+        break;
+
+    case $path === '/admin/imgbed-sync':
+        require_admin();
+        if (request_method() !== 'POST') {
+            json_response(['message' => 'Method Not Allowed'], 405);
+        }
+        verify_csrf();
+        @set_time_limit(60);
+        $result = yimai_imgbed_sync_existing((string) wp_unslash($_POST['path'] ?? ''));
+        json_response($result, $result['ok'] ? 200 : 400);
         break;
 
     case $path === '/admin/changepass':

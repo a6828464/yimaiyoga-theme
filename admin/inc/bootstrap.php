@@ -68,6 +68,10 @@ function save_config(array $config): void
         $config[$key] = array_values($config[$key] ?? []);
     }
     $config['images']['studioImages'] = array_values($config['images']['studioImages'] ?? []);
+    $config['announcements']['items'] = array_values(
+        array_filter(is_array($config['announcements']['items'] ?? null) ? $config['announcements']['items'] : [],
+            'is_array')
+    );
     // 备份：保留最近 20 份
     $backups = get_option('yimai_site_config_backups', []);
     $backups = is_array($backups) ? $backups : [];
@@ -159,21 +163,56 @@ function verify_csrf(): void
 
 /**
  * 上传出口：确保本地文件已落盘后，尽力同步图床并写入映射，最后返回统一结构。
- * 图床失败完全静默——本地文件始终可用。
+ * 图床失败完全静默——本地文件始终可用。imgbed 为完整图床 URL（未同步时 null）。
  */
 function yimai_finish_upload(string $target, string $mime, string $name): array
 {
+    $imgbedFull = null;
     if (is_file($target)) {
         try {
             $imgbedPath = yimai_imgbed_upload($target, $mime, $name);
             if ($imgbedPath !== null) {
                 yimai_imgbed_remember('/uploads/' . $name, $imgbedPath);
+                $imgbedConfig = yimai_imgbed_config();
+                $imgbedFull = $imgbedConfig['domain'] . '/' . $imgbedPath;
             }
         } catch (Throwable $e) {
             // 图床同步失败不影响上传结果
         }
     }
-    return ['ok' => true, 'path' => '/uploads/' . $name];
+    return ['ok' => true, 'path' => '/uploads/' . $name, 'imgbed' => $imgbedFull];
+}
+
+/**
+ * 把一张已存在的本地图片同步到图床（后台「图床」切换按钮触发）。
+ * 已有映射直接返回；未同步则现场上传并记住映射。
+ */
+function yimai_imgbed_sync_existing(string $rel): array
+{
+    $rel = '/' . ltrim(trim($rel), '/');
+    if ($rel === '/' || !str_starts_with($rel, '/uploads/') || str_contains($rel, '..')) {
+        return ['ok' => false, 'message' => '路径不合法'];
+    }
+    $config = yimai_imgbed_config();
+    if ($config === []) {
+        return ['ok' => false, 'message' => '尚未配置图床：请先在「基础与SEO」填写图床地址'];
+    }
+    $map = yimai_imgbed_map();
+    $imgbedPath = $map[$rel] ?? null;
+    if ($imgbedPath === null) {
+        $abs = upload_path() . '/' . basename($rel);
+        if (!is_file($abs)) {
+            return ['ok' => false, 'message' => '本地文件不存在：' . $rel];
+        }
+        $info = @getimagesize($abs);
+        $mime = is_array($info) ? ($info['mime'] ?? '') : '';
+        $imgbedPath = yimai_imgbed_upload($abs, $mime, basename($rel));
+        if ($imgbedPath === null) {
+            return ['ok' => false, 'message' => '同步图床失败，请稍后重试'];
+        }
+        yimai_imgbed_remember($rel, $imgbedPath);
+    }
+    return ['ok' => true, 'imgbed' => $config['domain'] . '/' . $imgbedPath];
 }
 
 /* ---------- 上传（存主题 assets/images/uploads，对应原站 /uploads/） ---------- */
@@ -276,6 +315,29 @@ function save_uploaded_image(array $file, string $field = ''): array
 }
 
 /* ---------- 渲染 ---------- */
+/**
+ * 后台图片字段：预览 + 地址输入 + 「本地 / 图床」切换 + 上传按钮。
+ * 值为 http 开头时视为图床/外链（图床侧高亮），否则为本地相对路径。
+ */
+function admin_image_field(string $path, string $label, string $value, string $hint = ''): void
+{
+    $value = trim((string) $value);
+    $isRemote = preg_match('/^https?:\/\//i', $value) === 1;
+    ?>
+    <label><?php echo h($label); ?>
+      <div class="img-preview" data-preview="<?php echo h($path); ?>"><img src="<?php echo esc_url(yimai_image_url($value)); ?>" onerror="this.parentNode.textContent='无预览'"></div>
+      <input data-path="<?php echo h($path); ?>" value="<?php echo h($value); ?>" placeholder="/uploads/… 或 https://…">
+      <div class="src-toggle" data-src-toggle="<?php echo h($path); ?>">
+        <button type="button" data-src-btn="local" <?php if (!$isRemote) echo 'class="active"'; ?>>本地存储</button>
+        <button type="button" data-src-btn="imgbed" <?php if ($isRemote) echo 'class="active"'; ?>>图床加速</button>
+        <span class="src-hint" data-src-hint="<?php echo h($path); ?>"></span>
+      </div>
+      <div class="file-row"><input type="file" data-upload-for="<?php echo h($path); ?>" accept="image/*"><button type="button" class="upload-btn" data-upload-trigger="<?php echo h($path); ?>">上传新图</button></div>
+      <?php if ($hint !== ''): ?><span class="hint"><?php echo h($hint); ?></span><?php endif; ?>
+    </label>
+    <?php
+}
+
 function render_view(string $name, array $data = []): void
 {
     extract($data, EXTR_SKIP);

@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.2.3');
+define('YIMAI_VERSION', '1.3.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -150,18 +150,57 @@ function yimai_image_url(?string $path): string
         return YIMAI_THEME_URI . '/assets/css/placeholder.svg';
     }
     if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+        // 后台显式选择的图床 / 外链地址，直接使用（加载失败由 app.js 按 footer 兜底映射换回本地）
         return $path;
     }
-    // 主题内图片目录 assets/images/uploads/ 对应原站 /uploads/
-    // 已同步图床的文件优先走图床（app.js 在加载失败时按 footer 的兜底映射换回本地）
-    $map = yimai_imgbed_map();
-    if (isset($map[$path])) {
-        $config = yimai_imgbed_config();
-        if ($config !== []) {
-            return $config['domain'] . '/' . $map[$path];
-        }
-    }
     return yimai_local_image_url($path);
+}
+
+/* -------------------------------------------------------------------------
+ * 活动公告（后台「活动公告」面板维护；首页弹窗 + 预约页活动条）
+ * ---------------------------------------------------------------------- */
+
+/**
+ * 当前生效的活动：取列表中最后一条「启用中」且在起止日期内的活动。
+ * 多条同时启用时，靠后的（后添加的）优先展示；没有则返回空数组。
+ */
+function yimai_active_announcement(): array
+{
+    $ann = yimai_config()['announcements'] ?? [];
+    $items = is_array($ann['items'] ?? null) ? $ann['items'] : [];
+    $now = current_time('timestamp');
+    $picked = [];
+    foreach ($items as $item) {
+        if (!is_array($item) || empty($item['active'])) {
+            continue;
+        }
+        if (trim((string) ($item['title'] ?? '')) === '' && trim((string) ($item['content'] ?? '')) === '') {
+            continue;
+        }
+        $start = trim((string) ($item['start'] ?? ''));
+        $end = trim((string) ($item['end'] ?? ''));
+        if ($start !== '' && $now < (strtotime($start . ' 00:00:00') ?: 0)) {
+            continue;
+        }
+        if ($end !== '' && $now > (strtotime($end . ' 23:59:59') ?: PHP_INT_MAX)) {
+            continue;
+        }
+        $picked = $item;
+    }
+    return $picked;
+}
+
+/** 公告跳转链接：留空返回空；完整网址原样；否则按站点内路径处理 */
+function yimai_notice_link(array $item): string
+{
+    $link = trim((string) ($item['link'] ?? ''));
+    if ($link === '') {
+        return '';
+    }
+    if (str_starts_with($link, 'http://') || str_starts_with($link, 'https://')) {
+        return $link;
+    }
+    return home_url('/' . ltrim($link, '/'));
 }
 
 function yimai_nav_items(): array
