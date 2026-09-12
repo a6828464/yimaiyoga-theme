@@ -297,13 +297,8 @@ function save_uploaded_image(array $file, string $field = ''): array
     imagealphablending($canvas, true);
     imagecopyresampled($canvas, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
 
-    if ($isFavicon) {
-        // favicon 统一转 PNG 白色底（浏览器兼容）
-        $white = imagecolorallocate($canvas, 255, 255, 255);
-        imagefilledrectangle($canvas, 0, 0, $newWidth, $newHeight, $white);
-        imagecopyresampled($canvas, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-        imagepng($canvas, $target, 9);
-    } elseif ($keepPng) {
+    if ($keepPng || $isFavicon) {
+        // PNG 保留透明通道（favicon 不再铺白底，浏览器标签页显示透明图标）
         imagepng($canvas, $target, 9);
     } elseif ($mime === 'image/webp' && function_exists('imagewebp')) {
         imagewebp($canvas, $target, 84);

@@ -55,15 +55,22 @@
     return '<div style="margin-top:10px">'+html+'</div>';
   }
 
-  /* ================= Tab 切换 ================= */
+  /* ================= Tab 切换 + 手机端抽屉 ================= */
   var tabs=document.querySelectorAll('[data-tab]');
+  var drawer=document.querySelector('[data-drawer]');
+  var backdrop=document.querySelector('.drawer-backdrop');
+  function openDrawer(){if(drawer){drawer.classList.add('open')}if(backdrop){backdrop.classList.add('open')}}
+  function closeDrawer(){if(drawer){drawer.classList.remove('open')}if(backdrop){backdrop.classList.remove('open')}}
+  document.querySelectorAll('[data-drawer-open]').forEach(function(b){b.addEventListener('click',openDrawer)});
+  document.querySelectorAll('[data-drawer-close]').forEach(function(b){b.addEventListener('click',closeDrawer)});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer()}});
   function showTab(name){
     document.querySelectorAll('[data-tab]').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===name)});
     document.querySelectorAll('[data-panel]').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-panel')===name)});
     var btn=document.querySelector('[data-tab="'+name+'"]');
     var title=document.querySelector('[data-main-title]');
     if(btn&&title&&btn.getAttribute('data-title')){title.textContent=btn.getAttribute('data-title')}
-    if(name==='raw'){refreshRaw()}
+    closeDrawer();
   }
   tabs.forEach(function(b){b.addEventListener('click',function(){showTab(b.getAttribute('data-tab'))})});
 
@@ -157,7 +164,6 @@
     var value=field.value;
     if(field.getAttribute('type')==='checkbox'){value=field.checked}
     if(field.hasAttribute('data-array-lines')){value=value.split('\n').map(function(i){return i.trim()}).filter(Boolean)}
-    if(field.hasAttribute('data-json')){try{value=JSON.parse(value)}catch(e){throw new Error('JSON 格式错误：'+path)}}
     setPath(path,value);
     var p=path.split('.');
     if(p[0]==='site'||p[0]==='images'){updatePreview(path)}
@@ -205,7 +211,6 @@
       var name=item.name||item.label||item.title||item.q||('项目 '+(idx+1));
       var html='<div class="item" data-idx="'+idx+'">';
       html+='<div class="item-head"><b>'+esc(name)+'</b><span class="ops">';
-      if(key==='announcements'){html+='<button type="button" class="mini" data-bump-id="announcements.'+idx+'" title="更换活动编号，让访客下次进首页重新弹一次">重新弹出</button>'}
       html+='<button type="button" class="del" data-del-item="'+key+'" data-idx="'+idx+'">删除</button></span></div>';
       html+='<div class="grid2">';
       schema.fields.forEach(function(f){
@@ -299,19 +304,6 @@
     });
   });
 
-  // 重新弹出（更换公告编号）
-  root.addEventListener('click',function(e){
-    var bump=e.target.closest?e.target.closest('[data-bump-id]'):null;
-    if(!bump)return;
-    var idx=parseInt(bump.getAttribute('data-bump-id').split('.').pop(),10);
-    var arr=getList('announcements')||[];
-    if(arr[idx]){
-      arr[idx].id='act-'+Date.now();
-      renderList('announcements');
-      msg('活动编号已更换，访客下次进首页会重新弹窗（点保存生效）');
-    }
-  });
-
   /* ================= 普通字段即时同步 ================= */
   root.querySelectorAll('[data-path]').forEach(function(field){
     if(field.getAttribute('data-path')==='__root__'){return}
@@ -399,6 +391,25 @@
     });
   });
 
+  /* ================= 全站主题（前台网站配色） ================= */
+  (function(){
+    var cards=document.querySelectorAll('[data-site-theme-set]');
+    if(!cards.length)return;
+    function applySiteTheme(id){
+      setPath('site.theme',id);
+      cards.forEach(function(c){
+        c.classList.toggle('active',c.getAttribute('data-site-theme-set')===id);
+      });
+    }
+    applySiteTheme(String(getPath('site.theme')||'ebony-ivory'));
+    cards.forEach(function(c){
+      c.addEventListener('click',function(){
+        applySiteTheme(c.getAttribute('data-site-theme-set'));
+        msg('网站配色已选「'+c.querySelector('b').textContent+'」，点「保存全部更改」后前台生效');
+      });
+    });
+  })();
+
   /* ================= 后台外观主题 ================= */
   var THEME_KEY='yimai_admin_theme';
   function applyAdminTheme(id){
@@ -423,30 +434,10 @@
   })();
 
   /* ================= 保存 ================= */
-  /* 原始 JSON：改动过则保存时以它为准；未改动则在打开该页签时同步当前配置 */
-  var rawBox=root.querySelector('[data-json]');
-  var rawDirty=false;
-  function refreshRaw(){
-    if(rawBox&&!rawDirty){rawBox.value=JSON.stringify(config,null,2)}
-  }
-  if(rawBox){
-    rawBox.addEventListener('input',function(){
-      rawDirty=true;
-      try{JSON.parse(rawBox.value);rawBox.classList.remove('bad')}
-      catch(e){rawBox.classList.add('bad')}
-    });
-  }
   var saveBtn=root.querySelector('button[type=submit]');
   root.addEventListener('submit',function(event){
     event.preventDefault();
-    try{
-      if(rawBox&&rawDirty){
-        config=JSON.parse(rawBox.value);
-        hidden.value=JSON.stringify(config,null,2);
-      }else{
-        syncAll();
-      }
-    }catch(e){msg('原始 JSON 格式错误，请修正后再保存');return}
+    try{syncAll()}catch(e){msg(e.message);return}
     var fd=new FormData(root);
     msg('保存中...');
     fetch('/admin/save',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){

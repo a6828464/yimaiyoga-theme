@@ -7,14 +7,18 @@ $imgbedMap = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
 $imgbedDomain = function_exists('yimai_imgbed_config') ? (yimai_imgbed_config()['domain'] ?? '') : '';
 $uploadTarget = $config['site']['uploadTarget'] ?? 'imgbed';
 $noticeEnabled = $config['announcements']['enabled'] ?? true;
+$stripEnabled = $config['announcements']['stripEnabled'] ?? true;
 $adminTheme = (string) ($config['site']['adminTheme'] ?? '');
-/* 后台外观主题（与下方 CSS 变量一一对应） */
+$siteTheme = (string) ($config['site']['theme'] ?? 'ebony-ivory');
+/* 全站主题预设（前台网站配色，functions.php yimai_site_theme_presets） */
+$siteThemes = function_exists('yimai_site_theme_presets') ? yimai_site_theme_presets() : [];
+/* 后台外观主题（只影响后台界面） */
 $adminThemes = [
-    'paper' => ['name' => '宣纸 · 暖白', 'desc' => '默认 · 米白纸感', 'sw' => ['#f7f5f0', '#ffffff', '#a9795f', '#1d241f']],
-    'inknight' => ['name' => '墨夜 · 深色', 'desc' => '护眼暗色台面', 'sw' => ['#191a17', '#222320', '#c9926e', '#e9e5da']],
-    'celadon' => ['name' => '青瓷 · 雅绿', 'desc' => '清淡东方绿', 'sw' => ['#edf2ed', '#fbfdfb', '#47806a', '#24352c']],
-    'terra' => ['name' => '陶土 · 暖橘', 'desc' => '赤陶暖调', 'sw' => ['#f6efe8', '#fffcf9', '#b0623c', '#372820']],
-    'dusk' => ['name' => '黛蓝 · 雾蓝', 'desc' => '沉静蓝灰', 'sw' => ['#eef0f5', '#fcfdff', '#4c6a9e', '#232a3a']],
+    'paper' => ['name' => '宣纸 · 暖白', 'sw' => ['#f7f5f0', '#ffffff', '#a9795f', '#1d241f']],
+    'inknight' => ['name' => '墨夜 · 深色', 'sw' => ['#191a17', '#222320', '#c9926e', '#e9e5da']],
+    'celadon' => ['name' => '青瓷 · 雅绿', 'sw' => ['#edf2ed', '#fbfdfb', '#47806a', '#24352c']],
+    'terra' => ['name' => '陶土 · 暖橘', 'sw' => ['#f6efe8', '#fffcf9', '#b0623c', '#372820']],
+    'dusk' => ['name' => '黛蓝 · 雾蓝', 'sw' => ['#eef0f5', '#fcfdff', '#4c6a9e', '#232a3a']],
 ];
 /* 侧边栏：分组 => [面板 => 标题] */
 $navGroups = [
@@ -22,7 +26,7 @@ $navGroups = [
         'site' => '基础与 SEO',
         'images' => '图片管理',
         'notice' => '活动公告',
-        'appearance' => '外观主题',
+        'appearance' => '全站主题',
     ],
     '内容' => [
         'copy' => '页面文案',
@@ -38,7 +42,6 @@ $navGroups = [
     '系统' => [
         'update' => '在线更新',
         'security' => '账号安全',
-        'raw' => '原始 JSON',
     ],
 ];
 ?><!DOCTYPE html>
@@ -82,13 +85,22 @@ body[data-admin-theme="dusk"]{
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif;padding-bottom:120px}
+/* 手机端顶栏（桌面隐藏） */
+.mobile-top{display:none;position:sticky;top:0;z-index:45;align-items:center;gap:10px;background:var(--bar);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top))}
+.menu-btn{width:38px;height:38px;flex:none;border:1px solid var(--line);background:var(--card);border-radius:10px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;cursor:pointer}
+.menu-btn span{width:16px;height:1.5px;background:var(--ink);display:block;border-radius:2px}
+.mobile-brand{font-weight:700;font-size:14px;letter-spacing:.04em}
+.mobile-brand span{font-weight:400;font-size:11px;color:var(--mut)}
+.mobile-ver{margin-left:auto;font-size:11px;color:var(--mut)}
 .shell{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
-/* ---------- 左侧边栏 ---------- */
+/* ---------- 左侧边栏（桌面常驻 / 手机抽屉） ---------- */
+.drawer-backdrop{display:none}
 .side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line)}
-.side-head{padding:20px 18px 10px}
+.side-head{padding:20px 18px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .side-brand{font-size:16px;font-weight:700;letter-spacing:.05em}
 .side-brand span{font-weight:400;font-size:11px;color:var(--mut);margin-left:6px}
 .side-ver{font-size:11px;color:var(--mut);margin-top:4px}
+.side-close{display:none;width:32px;height:32px;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:18px;line-height:1;cursor:pointer;align-items:center;justify-content:center}
 .side-nav{flex:1;overflow-y:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:2px}
 .side-group{font-size:10px;letter-spacing:.2em;color:var(--mut);margin:14px 8px 6px}
 .side-nav button{display:flex;align-items:center;border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--ink);cursor:pointer;transition:.15s}
@@ -119,9 +131,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 .item-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .item-head b{font-size:13px}
 .item-head .ops{display:flex;gap:8px}
-.item-head .del,.item-head .mini{border:1px solid var(--line);color:var(--clay);background:transparent;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer}
-.item-head .mini{color:var(--mut)}
-.item-head .del:hover,.item-head .mini:hover{background:var(--hover)}
+.item-head .del{border:1px solid var(--line);color:var(--clay);background:transparent;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer}
+.item-head .del:hover{background:var(--hover)}
 .add-btn{border:1px dashed var(--clay);color:var(--clay);background:transparent;border-radius:10px;padding:9px 16px;font-size:13px;cursor:pointer;width:100%}
 .add-btn:hover{background:var(--hover)}
 .img-preview{width:100%;height:120px;border-radius:8px;overflow:hidden;background:var(--imgbg);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut);margin-bottom:8px;border:1px solid var(--line)}
@@ -145,38 +156,38 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 .savebar .msg{font-size:13px;color:var(--clay)}
 .tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0;background:var(--input)}
 .tag .x{cursor:pointer;color:var(--clay);font-weight:700}
-.json-wrap{font-family:Consolas,monospace;font-size:12px;min-height:300px;background:#1d241f;color:#e8e4da;border:1px solid var(--line);border-radius:10px;padding:14px;width:100%}
-.json-wrap.bad{border-color:#c0392b}
 /* 更新日志 */
 .log-entry{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--item)}
-.log-entry.new{border-color:var(--clay);background:var(--item)}
+.log-entry.new{border-color:var(--clay)}
 .log-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .log-head b{font-size:13px}
 .log-date{font-size:11px;color:var(--mut)}
 .log-badge{font-style:normal;font-size:10px;background:var(--clay);color:#fff;border-radius:999px;padding:2px 8px}
 .log-entry ul{margin:0;padding-left:18px;font-size:12px;color:var(--mut);line-height:1.9}
-/* 外观主题 */
-.theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+/* 全站主题 */
+.site-theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .theme-card{display:grid;gap:5px;justify-items:start;border:1px solid var(--line);background:var(--item);border-radius:12px;padding:14px;cursor:pointer;text-align:left}
 .theme-card.active{border-color:var(--clay);box-shadow:0 0 0 1px var(--clay) inset}
 .theme-card b{font-size:13px;color:var(--ink)}
 .theme-card span{font-size:11px;color:var(--mut)}
 .theme-swatch{display:flex;gap:5px;margin-bottom:2px}
 .theme-swatch i{width:18px;height:18px;border-radius:50%;border:1px solid var(--line)}
-/* ---------- 手机端 ---------- */
+.admin-theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.admin-theme-grid .theme-card{padding:10px 12px}
+.admin-theme-grid .theme-swatch i{width:13px;height:13px}
+/* ---------- 手机端：顶栏 + 左侧抽屉 ---------- */
 @media(max-width:880px){
   body{padding-bottom:96px}
+  .mobile-top{display:flex}
   .shell{display:block}
-  .side{position:sticky;top:0;z-index:40;height:auto;border-right:0;border-bottom:1px solid var(--line);display:block}
-  .side-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 2px}
-  .side-brand{font-size:15px}
-  .side-ver{margin-top:2px}
-  .side-nav{flex-direction:row;overflow-x:auto;padding:8px 12px;gap:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .side-nav::-webkit-scrollbar{display:none}
-  .side-group{display:none}
-  .side-nav button{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:8px 15px;font-size:12.5px;background:var(--card);flex:none}
-  .side-nav button.active{border-color:var(--clay);background:var(--active-bg);color:var(--active-fg)}
-  .side-foot{display:none}
+  .drawer-backdrop{display:block;position:fixed;inset:0;z-index:55;background:rgb(0 0 0/.38);opacity:0;visibility:hidden;transition:opacity .25s ease,visibility .25s ease}
+  .drawer-backdrop.open{opacity:1;visibility:visible}
+  .side{position:fixed;top:0;left:0;bottom:0;height:auto;width:min(78vw,300px);transform:translateX(-103%);transition:transform .28s ease;z-index:60;border-right:1px solid var(--line)}
+  .side.open{transform:none;box-shadow:12px 0 40px rgb(0 0 0/.18)}
+  .side-head{padding:14px 14px 8px;align-items:center}
+  .side-close{display:flex}
+  .side-nav{padding:4px 12px 12px}
+  .side-foot{padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
   .main-top{padding:12px 16px}
   .main-top .sub{display:none}
   .container{padding:14px 14px 20px}
@@ -184,7 +195,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   .grid2{grid-template-columns:1fr}
   .item{padding:12px}
   .img-preview{height:110px}
-  .json-wrap{min-height:220px;font-size:11px}
   .savebar{left:0;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom));gap:10px}
   .savebar .btn{flex:1;padding:12px 10px;font-size:13.5px}
   .savebar .btn.primary{max-width:60%}
@@ -195,12 +205,22 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <body<?php echo $adminTheme !== '' ? ' data-admin-theme="' . esc_attr($adminTheme) . '"' : ''; ?>>
 <script>(function(){try{var t=localStorage.getItem('yimai_admin_theme');if(t){document.body.setAttribute('data-admin-theme',t)}}catch(e){}})();</script>
 
+<div class="mobile-top">
+  <button class="menu-btn" type="button" data-drawer-open aria-label="打开菜单"><span></span><span></span><span></span></button>
+  <div class="mobile-brand">一麦瑜伽 <span>内容后台</span></div>
+  <div class="mobile-ver">v<?php echo h(YIMAI_VERSION); ?></div>
+</div>
+<div class="drawer-backdrop" data-drawer-close></div>
+
 <div class="shell">
 
-<aside class="side">
+<aside class="side" data-drawer>
   <div class="side-head">
-    <div class="side-brand">一麦瑜伽<span>内容后台</span></div>
-    <div class="side-ver">主题版本 v<?php echo h(YIMAI_VERSION); ?></div>
+    <div>
+      <div class="side-brand">一麦瑜伽<span>内容后台</span></div>
+      <div class="side-ver">主题版本 v<?php echo h(YIMAI_VERSION); ?> · 保存后前台即时生效</div>
+    </div>
+    <button class="side-close" type="button" data-drawer-close aria-label="关闭菜单">×</button>
   </div>
   <nav class="side-nav">
     <?php foreach ($navGroups as $group => $items): ?>
@@ -250,7 +270,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     <div style="border:1px dashed var(--line);border-radius:10px;padding:18px;display:flex;align-items:center;justify-content:center">
       <img data-logo-live alt="Logo 实时预览" style="height:<?php echo esc_attr((int) ($config['site']['logoHeight'] ?? 13)); ?>px;width:auto;display:block;object-fit:contain">
     </div>
-    <p class="hint">这是导航栏 logo 的实际大小，调上方滑块实时变化；上传或更换 Logo 图片请到「图片管理」</p>
+    <p class="hint">这是导航栏 logo 的实际大小，调下方滑块实时变化；上传或更换 Logo 图片请到「图片管理」</p>
     <div style="margin-top:10px">
       <label>Logo 显示大小（滑块实时预览，数字越小图越小）
         <input type="range" min="4" max="60" step="1" data-path="site.logoHeight" data-range="site.logoHeight" value="<?php echo h($config['site']['logoHeight'] ?? 13); ?>" style="width:100%;margin:6px 0">
@@ -281,7 +301,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     <h3>品牌图片 <span style="font-weight:400;font-size:12px;color:var(--mut)">（导航 / 浏览器图标 / 页脚）</span></h3>
     <div class="grid2">
       <?php admin_image_field('site.logo', '品牌 Logo', $config['site']['logo'] ?? '', '建议透明底 PNG；显示大小在「基础与SEO」调节'); ?>
-      <?php admin_image_field('site.favicon', 'Favicon 图标', $config['site']['favicon'] ?? '', '浏览器标签页小图标，建议正方形'); ?>
+      <?php admin_image_field('site.favicon', 'Favicon 图标', $config['site']['favicon'] ?? '', '浏览器标签页小图标，建议正方形透明 PNG'); ?>
       <?php admin_image_field('site.wechatQr', '公众号二维码', $config['site']['wechatQr'] ?? '', '显示在网站页脚'); ?>
     </div>
   </div>
@@ -319,9 +339,11 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <!-- ===================== 活动公告 ===================== -->
 <section class="panel" data-panel="notice">
   <div class="card">
-    <h3>首页弹窗公告</h3>
-    <label class="switch"><input type="checkbox" data-path="announcements.enabled" <?php echo $noticeEnabled ? 'checked' : ''; ?>> 首页弹窗开启</label>
-    <p class="hint">开启后，最新一条「启用中」的活动会在访客<b>首次进入首页时弹窗展示一次</b>；发布新活动会重新弹出，访客关闭后不再打扰。此开关只控制首页弹窗，预约页活动条始终随活动有无显示。</p>
+    <h3>展示位置</h3>
+    <label class="switch"><input type="checkbox" data-path="announcements.enabled" <?php echo $noticeEnabled ? 'checked' : ''; ?>> 首页弹窗</label>
+    <p class="hint">开启后，访客<b>每次进入首页都会自动弹窗展示一次</b>当前活动；关闭弹窗后本次停留不再打扰，重新进入首页会再次弹出。</p>
+    <label class="switch" style="margin-top:12px"><input type="checkbox" data-path="announcements.stripEnabled" <?php echo $stripEnabled ? 'checked' : ''; ?>> 预约页顶部活动条</label>
+    <p class="hint">预约页最上方显示一条活动横幅，点击查看活动详情；没有启用中的活动时自动隐藏。</p>
   </div>
   <div class="card">
     <h3>活动列表</h3>
@@ -331,20 +353,32 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
 </section>
 
-<!-- ===================== 外观主题 ===================== -->
+<!-- ===================== 全站主题 ===================== -->
 <section class="panel" data-panel="appearance">
   <div class="card">
-    <h3>后台外观</h3>
-    <p class="hint" style="margin-top:0">点击即时切换整个后台的配色，当前浏览器会记住你的选择；点「保存全部更改」后所有设备登录都使用这款。</p>
-    <div class="theme-grid">
-      <?php foreach ($adminThemes as $id => $t): ?>
-      <button type="button" class="theme-card" data-admin-theme-set="<?php echo h($id); ?>">
+    <h3>网站配色</h3>
+    <p class="hint" style="margin-top:0">一键切换整个官网的配色方案（页面底色、强调色、文字色整体联动），保存后前台即时生效。</p>
+    <div class="site-theme-grid">
+      <?php foreach ($siteThemes as $id => $t): ?>
+      <button type="button" class="theme-card<?php echo $siteTheme === $id ? ' active' : ''; ?>" data-site-theme-set="<?php echo h($id); ?>">
         <span class="theme-swatch"><?php foreach ($t['sw'] as $c): ?><i style="background:<?php echo h($c); ?>"></i><?php endforeach; ?></span>
         <b><?php echo h($t['name']); ?></b>
         <span><?php echo h($t['desc']); ?></span>
       </button>
       <?php endforeach; ?>
     </div>
+  </div>
+  <div class="card">
+    <h3>后台界面配色 <span style="font-weight:400;font-size:12px;color:var(--mut)">（只影响这个后台，不影响网站）</span></h3>
+    <div class="admin-theme-grid">
+      <?php foreach ($adminThemes as $id => $t): ?>
+      <button type="button" class="theme-card" data-admin-theme-set="<?php echo h($id); ?>">
+        <span class="theme-swatch"><?php foreach ($t['sw'] as $c): ?><i style="background:<?php echo h($c); ?>"></i><?php endforeach; ?></span>
+        <b><?php echo h($t['name']); ?></b>
+      </button>
+      <?php endforeach; ?>
+    </div>
+    <p class="hint">点击即时切换，当前浏览器记住选择；点「保存全部更改」后所有设备都使用这款。</p>
   </div>
 </section>
 
@@ -470,15 +504,6 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
 </section>
 
-<!-- ===================== 原始 JSON ===================== -->
-<section class="panel" data-panel="raw">
-  <div class="card">
-    <h3>原始配置 JSON <span style="font-weight:400;font-size:12px;color:var(--mut)">（高级用户）</span></h3>
-    <p class="hint">打开此页时会自动同步当前全部配置；在此修改并保存后<b>以这里的 JSON 为准</b>（其他页签的改动会被覆盖）。保存前自动校验，格式错误不会写入。</p>
-    <textarea class="json-wrap" data-path="__root__" data-json><?php echo h($json); ?></textarea>
-  </div>
-</section>
-
 <div class="savebar">
   <button type="button" class="btn secondary" data-reset>重置表单</button>
   <button type="submit" class="btn primary">保存全部更改</button>
@@ -498,7 +523,7 @@ window.YIMAI_IMGBED = {
   map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
 };
 </script>
-<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=4'); ?>"></script>
+<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=5'); ?>"></script>
 <script>
 /* ---------- 在线更新 ---------- */
 (function () {

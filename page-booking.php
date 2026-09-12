@@ -12,7 +12,11 @@ $copy   = $config['copy']['booking'] ?? [];
 $images = $config['images'] ?? [];
 $notice = function_exists('yimai_active_announcement') ? yimai_active_announcement() : [];
 ?>
-<?php if ($notice): ?>
+<?php
+$notice = function_exists('yimai_active_announcement') ? yimai_active_announcement() : [];
+$stripOn = ($config['announcements']['stripEnabled'] ?? true) && $notice;
+?>
+<?php if ($stripOn): ?>
 <a class="activity-strip" href="<?php echo esc_url(yimai_notice_link($notice) ?: '#'); ?>" data-activity-strip>
   <span class="activity-strip-tag">活动</span>
   <span class="activity-strip-text"><strong><?php echo esc_html($notice['title'] ?? ''); ?></strong><?php $short = trim((string) ($notice['content'] ?? '')); if ($short !== ''): ?> · <?php echo esc_html(mb_strimwidth(preg_replace('/\s+/u', ' ', $short), 0, 60, '…')); endif; ?></span>

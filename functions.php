@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.4.1');
+define('YIMAI_VERSION', '1.5.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -117,6 +117,67 @@ function yimai_meta_description(): void
 }
 add_action('wp_head', 'yimai_meta_description', 1);
 
+/**
+ * 全站主题预设（后台「全站主题」可一键切换）。
+ * 每套完整定义 11 个前台颜色变量：pearl 页面底色 / linen 区块底色 / oat 描边 /
+ * clay 强调色 / moss 辅助色 / forest 深色块与标题 / ink 正文 / sage rose stone smoke 点缀。
+ */
+function yimai_site_theme_presets(): array
+{
+    return [
+        'ebony-ivory' => [
+            'name' => '黑檀米白',
+            'desc' => '默认 · 现行配色',
+            'sw' => ['#F9F6EE', '#EEEAE2', '#8E7660', '#11110F'],
+            'colors' => [],
+        ],
+        'celadon' => [
+            'name' => '青瓷苔绿',
+            'desc' => '清淡东方 · 修复疗愈感',
+            'sw' => ['#F6F9F4', '#E9F0E6', '#4C7A62', '#1A291F'],
+            'colors' => [
+                'pearl' => '#F6F9F4', 'linen' => '#E9F0E6', 'oat' => '#C7D5C2',
+                'clay' => '#4C7A62', 'moss' => '#5E7A64', 'forest' => '#1A291F',
+                'ink' => '#1A231C', 'sage' => '#9DB4A0', 'rose' => '#BFA398',
+                'stone' => '#AEBFB0', 'smoke' => '#72837A',
+            ],
+        ],
+        'terracotta' => [
+            'name' => '陶土赤橘',
+            'desc' => '赤陶暖调 · 活力温暖',
+            'sw' => ['#FBF5EE', '#F4E8DA', '#B05A35', '#2C1F17'],
+            'colors' => [
+                'pearl' => '#FBF5EE', 'linen' => '#F4E8DA', 'oat' => '#E1CCB6',
+                'clay' => '#B05A35', 'moss' => '#8A6A4F', 'forest' => '#2C1F17',
+                'ink' => '#251A12', 'sage' => '#BCA88F', 'rose' => '#C98D6B',
+                'stone' => '#CBB49B', 'smoke' => '#8C7761',
+            ],
+        ],
+        'dusk' => [
+            'name' => '黛蓝雾霭',
+            'desc' => '沉静蓝灰 · 呼吸感',
+            'sw' => ['#F5F7FA', '#E8EDF4', '#4A6591', '#1C2534'],
+            'colors' => [
+                'pearl' => '#F5F7FA', 'linen' => '#E8EDF4', 'oat' => '#C5CFDC',
+                'clay' => '#4A6591', 'moss' => '#5D6E84', 'forest' => '#1C2534',
+                'ink' => '#1A2130', 'sage' => '#A3AFC1', 'rose' => '#A79FB5',
+                'stone' => '#B2BCCA', 'smoke' => '#76819A',
+            ],
+        ],
+        'blush' => [
+            'name' => '玫瑰暖沙',
+            'desc' => '柔和玫瑰 · 温柔气质',
+            'sw' => ['#FBF4F1', '#F4E6E0', '#A9605A', '#2D1E1A'],
+            'colors' => [
+                'pearl' => '#FBF4F1', 'linen' => '#F4E6E0', 'oat' => '#E3CBC2',
+                'clay' => '#A9605A', 'moss' => '#7D6157', 'forest' => '#2D1E1A',
+                'ink' => '#271B17', 'sage' => '#C0A89E', 'rose' => '#C98A82',
+                'stone' => '#CCB3AB', 'smoke' => '#8C736A',
+            ],
+        ],
+    ];
+}
+
 function yimai_theme_vars(): array
 {
     $config = yimai_config();
@@ -130,7 +191,11 @@ function yimai_theme_vars(): array
     if ($id === 'custom' && !empty($config['site']['customTheme'])) {
         return array_merge($themes, $config['site']['customTheme']);
     }
-    // 主题在转换时已固定为 ebony-ivory（黑檀米白），如需切换配色可改此数组。
+    $presets = yimai_site_theme_presets();
+    if (isset($presets[$id]['colors']) && $presets[$id]['colors'] !== []) {
+        return array_merge($themes, $presets[$id]['colors']);
+    }
+    // 主题在转换时已固定为 ebony-ivory（黑檀米白），可在后台「全站主题」切换配色。
     return $themes;
 }
 

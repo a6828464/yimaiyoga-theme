@@ -548,8 +548,10 @@ function yimai_site_data(bool $with_db = true): array
             ],
         ],
         'announcements' => [
-            // 首页弹窗总开关（关闭后首页不弹窗；预约页活动条仍随活动有无显示）
+            // 首页弹窗开关：开启后访客每次进入首页都自动弹一次（关闭弹窗后本次停留不再打扰）
             'enabled' => true,
+            // 预约页顶部活动条开关：有启用中的活动时显示
+            'stripEnabled' => true,
             'items' => [],
         ],
         'training_rights' => [
