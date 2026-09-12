@@ -42,7 +42,8 @@ function yimai_config_option_name(): string
 
 function default_config(): array
 {
-    return yimai_site_data();
+    // 纯默认结构（不含数据库旧值）：保存时以此为准，列表项才能真正删掉
+    return yimai_site_data(false);
 }
 
 function load_config(): array

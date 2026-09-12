@@ -4,7 +4,7 @@
  * Theme: yimaiyoga
  */
 
-function yimai_site_data(): array
+function yimai_site_data(bool $with_db = true): array
 {
     $default = [
         'site' => [
@@ -558,12 +558,16 @@ function yimai_site_data(): array
         ],
     ];
 
-    // 数据库配置覆盖（后台 /admin 保存的 yimai_site_config）
-    $db_raw = get_option('yimai_site_config', '');
-    if ($db_raw) {
-        $db_cfg = json_decode((string) $db_raw, true);
-        if (is_array($db_cfg)) {
-            return array_replace_recursive($default, $db_cfg);
+    // 数据库配置覆盖（后台 /admin 保存的 yimai_site_config）。
+    // with_db=false 返回纯默认结构：save_config 用它做合并基准，
+    // 否则空列表（如清空公告）会被旧数据库值重新填回来（array_replace_recursive 对空数组无键可替换）。
+    if ($with_db) {
+        $db_raw = get_option('yimai_site_config', '');
+        if ($db_raw) {
+            $db_cfg = json_decode((string) $db_raw, true);
+            if (is_array($db_cfg)) {
+                return array_replace_recursive($default, $db_cfg);
+            }
         }
     }
     return $default;
