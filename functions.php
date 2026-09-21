@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.6.1');
+define('YIMAI_VERSION', '1.7.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -41,9 +41,9 @@ add_action('after_setup_theme', 'yimai_setup');
  * ---------------------------------------------------------------------- */
 function yimai_enqueue(): void
 {
+    // 前台样式已合并为单一 app.css（原 app/fix/mobile-fix 三层合并，
+    // 消除了 fix 与 mobile-fix 之间无依赖声明导致的顺序不确定问题）。
     wp_enqueue_style('yimai-app', YIMAI_THEME_URI . '/assets/css/app.css', [], YIMAI_VERSION);
-    wp_enqueue_style('yimai-fix', YIMAI_THEME_URI . '/assets/css/fix.css', ['yimai-app'], YIMAI_VERSION);
-    wp_enqueue_style('yimai-mobile-fix', YIMAI_THEME_URI . '/assets/css/mobile-fix.css', ['yimai-app'], YIMAI_VERSION);
     wp_enqueue_script('yimai-app', YIMAI_THEME_URI . '/assets/js/app.js', [], YIMAI_VERSION, true);
 
     wp_localize_script('yimai-app', 'yimaiAjax', [
@@ -56,9 +56,22 @@ add_action('wp_enqueue_scripts', 'yimai_enqueue');
 /* -------------------------------------------------------------------------
  * 辅助函数（对应原站 app/helpers.php 与 app/themes.php）
  * ---------------------------------------------------------------------- */
-function yimai_config(): array
+/**
+ * 站点配置（默认结构 + DB 覆盖）。带静态缓存：一次请求内只解析一次，
+ * 避免每个调用点都重复 json_decode + 深合并（实测单次约 0.1ms，前台 6-10 次调用）。
+ *
+ * @param bool $invalidate 传 true 丢弃缓存重新读取（保存配置后使用）
+ */
+function yimai_config(bool $invalidate = false): array
 {
-    return yimai_site_data();
+    static $cache = null;
+    if ($invalidate) {
+        $cache = null;
+    }
+    if ($cache === null) {
+        $cache = yimai_site_data();
+    }
+    return $cache;
 }
 
 /**
@@ -114,8 +127,101 @@ function yimai_meta_description(): void
     if ($desc !== '') {
         echo "\n<meta name=\"description\" content=\"" . esc_attr($desc) . "\">";
     }
+    // 关键词：与 description 一起在 wp_head 统一输出（header.php 不再重复输出）
+    $keywords = $config['site']['keywords'] ?? [];
+    if (is_array($keywords)) {
+        $keywords = array_filter(array_map('trim', $keywords), static fn($k) => $k !== '');
+        if ($keywords !== []) {
+            echo "\n<meta name=\"keywords\" content=\"" . esc_attr(implode(',', $keywords)) . "\">";
+        }
+    }
+    // canonical：核心 rel_canonical() 对非 singular 页面（首页、归档）不输出
+    if (!is_singular()) {
+        global $wp;
+        $path = isset($wp->request) ? trim((string) $wp->request, '/') : '';
+        $url = $path === '' ? home_url('/') : home_url('/' . $path . '/');
+        if (is_paged()) {
+            $paged = (int) get_query_var('paged');
+            if ($paged > 1) {
+                $url = $path === '' ? home_url('/page/' . $paged . '/') : home_url('/' . $path . '/page/' . $paged . '/');
+            }
+        }
+        echo "\n<link rel=\"canonical\" href=\"" . esc_url($url) . "\">";
+    }
+    // Open Graph / Twitter：微信与社交分享需要缩略图与标题
+    $site = $config['site'] ?? [];
+    $title = trim((string) ($site['title'] ?? ''));
+    if (is_singular()) {
+        $title = wp_get_document_title();
+    }
+    $ogImage = '';
+    if (is_singular() && has_post_thumbnail()) {
+        $ogImage = (string) get_the_post_thumbnail_url(null, 'full');
+    }
+    if ($ogImage === '') {
+        $ogImage = yimai_image_url((string) ($config['images']['homeHero'] ?? ''));
+    }
+    if ($title !== '') {
+        echo "\n<meta property=\"og:type\" content=\"" . (is_singular() ? 'article' : 'website') . "\">";
+        echo "\n<meta property=\"og:site_name\" content=\"" . esc_attr((string) ($site['name'] ?? '')) . "\">";
+        echo "\n<meta property=\"og:title\" content=\"" . esc_attr($title) . "\">";
+        if ($desc !== '') {
+            echo "\n<meta property=\"og:description\" content=\"" . esc_attr($desc) . "\">";
+        }
+        echo "\n<meta property=\"og:url\" content=\"" . esc_url(is_singular() ? (string) get_permalink() : home_url('/')) . "\">";
+        if ($ogImage !== '') {
+            echo "\n<meta property=\"og:image\" content=\"" . esc_url($ogImage) . "\">";
+        }
+        echo "\n<meta name=\"twitter:card\" content=\"summary_large_image\">";
+        echo "\n<meta name=\"twitter:title\" content=\"" . esc_attr($title) . "\">";
+        if ($desc !== '') {
+            echo "\n<meta name=\"twitter:description\" content=\"" . esc_attr($desc) . "\">";
+        }
+        if ($ogImage !== '') {
+            echo "\n<meta name=\"twitter:image\" content=\"" . esc_url($ogImage) . "\">";
+        }
+    }
+    // 结构化数据：本地商家（宁波门店信息来自配置）
+    $studios = is_array($config['studios'] ?? null) ? $config['studios'] : [];
+    if ($studios !== [] && (is_front_page() || is_home())) {
+        $shops = [];
+        foreach ($studios as $studio) {
+            if (!is_array($studio) || trim((string) ($studio['name'] ?? '')) === '') {
+                continue;
+            }
+            $shops[] = [
+                '@type' => 'HealthAndBeautyBusiness',
+                'name' => (string) ($site['name'] ?? '') . ' · ' . $studio['name'],
+                'telephone' => (string) ($studio['phone'] ?? ''),
+                'address' => [
+                    '@type' => 'PostalAddress',
+                    'streetAddress' => (string) ($studio['address'] ?? ''),
+                    'addressRegion' => '浙江省',
+                    'addressLocality' => '宁波市',
+                    'addressCountry' => 'CN',
+                ],
+            ];
+        }
+        if ($shops !== []) {
+            $ld = ['@context' => 'https://schema.org', '@graph' => $shops];
+            echo "\n<script type=\"application/ld+json\">"
+                . wp_json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+                . '</script>';
+        }
+    }
 }
 add_action('wp_head', 'yimai_meta_description', 1);
+
+/** 404 页标记 noindex，避免被搜索引擎收录 */
+function yimai_robots_404(array $robots): array
+{
+    if (is_404()) {
+        $robots['noindex'] = true;
+        $robots['follow'] = true;
+    }
+    return $robots;
+}
+add_filter('wp_robots', 'yimai_robots_404');
 
 /**
  * 全站主题预设（后台「全站主题」可一键切换）。
@@ -322,6 +428,20 @@ function yimai_handle_booking(): void
 
     $webhook = yimai_wecom_webhook();
 
+    // 无论是否有 webhook，都先落库留存：否则未配置 webhook 时，
+    // 访客看到「已提交」但数据被直接丢弃，预约意向无声流失。
+    $entry = [
+        'time'     => current_time('mysql'),
+        'name'     => $name,
+        'phone'    => $phone,
+        'studio'   => $studio,
+        'interest' => $interest,
+        'message'  => $message,
+        'ip'       => substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45),
+        'notified' => false,
+    ];
+    yimai_booking_store($entry);
+
     if ($webhook !== '') {
         $payload = [
             'name' => $name,
@@ -347,8 +467,30 @@ function yimai_handle_booking(): void
         wp_send_json_error(['message' => '提交失败，请稍后再试或电话联系门店。'], 502);
     }
 
-    // 无 webhook 时也按成功处理（可在此扩展邮件通知）
+    // 未配置 webhook：预约已落库（后台「预约记录」可查看），不丢数据
     wp_send_json_success(['message' => '已提交，我们会尽快联系你。']);
+}
+
+/** 预约记录最多保留条数 */
+const YIMAI_BOOKING_MAX = 200;
+
+/** 写入一条预约记录（wp_options，无需自建表；保留最近 200 条） */
+function yimai_booking_store(array $entry): void
+{
+    $list = get_option('yimai_booking_entries', []);
+    $list = is_array($list) ? $list : [];
+    array_unshift($list, $entry);
+    if (count($list) > YIMAI_BOOKING_MAX) {
+        $list = array_slice($list, 0, YIMAI_BOOKING_MAX);
+    }
+    update_option('yimai_booking_entries', $list, false);
+}
+
+/** 读取预约记录（后台展示用，最新在前） */
+function yimai_booking_entries(): array
+{
+    $list = get_option('yimai_booking_entries', []);
+    return is_array($list) ? $list : [];
 }
 add_action('wp_ajax_nopriv_yimai_booking', 'yimai_handle_booking');
 add_action('wp_ajax_yimai_booking', 'yimai_handle_booking');

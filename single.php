@@ -10,6 +10,10 @@ get_header();
 while (have_posts()):
     the_post();
     $thumb = get_the_post_thumbnail_url(null, 'large');
+    // width/height 取媒体库真实尺寸用于预留位置、减少 CLS；取不到时不输出（不编造尺寸）
+    $thumbSize = $thumb ? wp_get_attachment_image_src((int) get_post_thumbnail_id(), 'large') : false;
+    $thumbW    = is_array($thumbSize) ? (int) $thumbSize[1] : 0;
+    $thumbH    = is_array($thumbSize) ? (int) $thumbSize[2] : 0;
     ?>
     <section class="page-hero reveal">
       <div>
@@ -23,14 +27,14 @@ while (have_posts()):
     </section>
 
     <?php if ($thumb): ?>
-    <div class="post-cover" style="max-width:1440px;margin:0 auto;padding:0 3rem;">
-      <img src="<?php echo esc_url($thumb); ?>" alt="<?php the_title_attribute(); ?>" style="width:100%;aspect-ratio:16/9;object-fit:cover;">
+    <div class="post-cover">
+      <img src="<?php echo esc_url($thumb); ?>" alt="<?php the_title_attribute(); ?>"<?php if ($thumbW > 0 && $thumbH > 0): ?> width="<?php echo esc_attr((string) $thumbW); ?>" height="<?php echo esc_attr((string) $thumbH); ?>"<?php endif; ?> loading="lazy">
     </div>
     <?php endif; ?>
 
     <section class="page-block post-content">
       <?php the_content(); ?>
-      <p style="margin-top:3rem;">
+      <p class="post-back">
         <a class="text-link" href="<?php echo esc_url(home_url('/blog')); ?>">← 返回博客</a>
       </p>
     </section>

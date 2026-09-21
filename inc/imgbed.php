@@ -98,7 +98,10 @@ function yimai_imgbed_upload(string $absolute_path, string $mime, string $filena
     $json = json_decode(wp_remote_retrieve_body($response), true);
     // 成功响应形如 [{"src":"/file/xxx.png"}]
     $src = $json[0]['src'] ?? ($json['src'] ?? null);
-    if (!is_string($src) || stripos($src, '/file/') !== 0) {
+    // 严格白名单：只接受 /file/ 下的常规路径段。
+    // 旧实现仅 stripos('/file/')===0，实测 "/file/x\"><script>…" 与
+    // "/file/../../evil.php" 都能通过，随后经内联 script 输出构成存储型 XSS。
+    if (!is_string($src) || !preg_match('#^/file/[A-Za-z0-9._/-]+$#', $src) || str_contains($src, '..')) {
         return null;
     }
     return $src;

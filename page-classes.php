@@ -13,7 +13,7 @@ $copy   = $config['copy']['classes'] ?? [];
 <section class="page-hero reveal">
   <div>
     <p class="eyebrow"><?php echo esc_html($copy['eyebrow'] ?? ''); ?></p>
-    <h1><?php echo wp_kses_post(nl2br(esc_html($copy['title'] ?? ''))); ?></h1>
+    <h1><?php echo nl2br(esc_html($copy['title'] ?? '')); ?></h1>
   </div>
   <?php if (!empty($copy['sideDescription'])): ?>
     <aside>
@@ -37,7 +37,7 @@ $copy   = $config['copy']['classes'] ?? [];
   <?php foreach ($config['classPaths'] ?? [] as $path): ?>
     <article>
       <p class="eyebrow"><?php echo esc_html($path['title'] ?? ''); ?></p>
-      <h3><?php echo esc_html($path['description'] ?? ''); ?></h3>
+      <h3 class="path-strip-description"><?php echo esc_html($path['description'] ?? ''); ?></h3>
       <div class="tags"><?php foreach ($path['tags'] ?? [] as $tag): ?><span><?php echo esc_html($tag); ?></span><?php endforeach; ?></div>
     </article>
   <?php endforeach; ?>

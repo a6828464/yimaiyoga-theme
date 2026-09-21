@@ -40,6 +40,7 @@ $navGroups = [
         'nav' => '导航菜单',
     ],
     '系统' => [
+        'bookings' => '预约记录',
         'update' => '在线更新',
         'security' => '账号安全',
     ],
@@ -51,6 +52,7 @@ $navGroups = [
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>网站内容后台 · 一麦瑜伽</title>
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/app.css'); ?>">
+<link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/admin.css'); ?>">
 <style>
 /* ---------- 主题变量（默认=宣纸；其余外观靠 body[data-admin-theme] 覆盖） ---------- */
 body{
@@ -250,7 +252,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </nav>
   <div class="side-foot">
     <a href="/" target="_blank">查看网站 ↗</a>
-    <a href="/admin/logout">退出登录</a>
+    <a href="<?php echo esc_url(yimai_admin_path('logout')); ?>">退出登录</a>
   </div>
 </aside>
 
@@ -261,7 +263,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 </header>
 
 <main class="container">
-<form data-admin-form method="post" action="/admin/save">
+<form data-admin-form method="post" action="<?php echo esc_url(yimai_admin_path('save')); ?>">
 <textarea name="config_json" data-config-json hidden><?php echo h($json); ?></textarea>
 <input type="hidden" name="csrf_token" value="<?php echo esc_attr(csrf_token()); ?>">
 
@@ -488,6 +490,46 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
 </section>
 
+<!-- ===================== 预约记录 ===================== -->
+<section class="panel" data-panel="bookings">
+  <div class="card">
+    <h3>预约记录 <span style="font-weight:400;font-size:12px;color:var(--mut)">（最近 <?php echo defined('YIMAI_BOOKING_MAX') ? (int) YIMAI_BOOKING_MAX : 200; ?> 条，最新在前）</span></h3>
+    <p class="hint">预约表单提交后会在此留存一份。配置了企业微信 Webhook 时会同时推送到群；未配置时这里就是唯一记录，请定期查看。</p>
+    <?php $bookings = function_exists('yimai_booking_entries') ? yimai_booking_entries() : []; ?>
+    <?php if ($bookings === []): ?>
+      <p class="hint" style="margin-top:14px">暂无预约记录。</p>
+    <?php else: ?>
+      <div style="margin-top:14px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+          <thead>
+            <tr style="text-align:left;color:var(--mut);border-bottom:1px solid var(--line)">
+              <th style="padding:8px 10px;white-space:nowrap">时间</th>
+              <th style="padding:8px 10px">姓名</th>
+              <th style="padding:8px 10px;white-space:nowrap">手机</th>
+              <th style="padding:8px 10px;white-space:nowrap">门店</th>
+              <th style="padding:8px 10px;white-space:nowrap">方向</th>
+              <th style="padding:8px 10px">备注</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($bookings as $b): ?>
+            <?php if (!is_array($b)) { continue; } ?>
+            <tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:8px 10px;white-space:nowrap;color:var(--mut)"><?php echo esc_html((string) ($b['time'] ?? '')); ?></td>
+              <td style="padding:8px 10px"><?php echo esc_html((string) ($b['name'] ?? '')); ?></td>
+              <td style="padding:8px 10px;white-space:nowrap"><?php echo esc_html((string) ($b['phone'] ?? '')); ?></td>
+              <td style="padding:8px 10px"><?php echo esc_html((string) ($b['studio'] ?? '')); ?></td>
+              <td style="padding:8px 10px"><?php echo esc_html((string) ($b['interest'] ?? '')); ?></td>
+              <td style="padding:8px 10px;color:var(--ink)"><?php echo esc_html((string) ($b['message'] ?? '')); ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</section>
+
 <!-- ===================== 账号安全 ===================== -->
 <section class="panel" data-panel="security">
   <div class="card">
@@ -504,7 +546,14 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 <section class="panel" data-panel="update">
   <div class="card">
     <h3>主题在线更新 <span style="font-weight:400;font-size:12px;color:var(--mut)">（GitHub + Gitee 双平台）</span></h3>
-    <p class="hint">本地迭代代码 → git push 推送双平台 → 在此点击「检查更新 / 立即更新」。更新只覆盖代码文件，保留服务器本地的配置、上传图片与密钥文件；更新前自动备份到主题 .backups 目录（保留最近 2 份）。</p>
+    <p class="hint">本地迭代代码 → 提交并 git push 推送双平台 → 在此点击「检查更新 / 立即更新」。更新只覆盖代码文件，保留服务器本地的配置、上传图片与密钥文件；密钥与备份不会被更新包覆盖。更新前自动备份到 <code>wp-content/yimai-backups</code>（保留最近 2 份，不含密钥）。</p>
+    <?php $updateState = function_exists('yimai_update_state') ? yimai_update_state() : []; ?>
+    <?php if (!empty($updateState['version'])): ?>
+      <p class="hint" style="margin-top:6px">上次更新：v<?php echo esc_html((string) $updateState['version']); ?>
+        <?php if (!empty($updateState['time'])): ?>· <?php echo esc_html((string) $updateState['time']); ?><?php endif; ?>
+        <?php if (!empty($updateState['source'])): ?>· 来源 <?php echo esc_html((string) $updateState['source']); ?><?php endif; ?>
+      </p>
+    <?php endif; ?>
     <div class="grid2" style="margin-top:12px">
       <label>当前版本<div style="font-size:15px;color:var(--ink)" data-update-local>—</div></label>
       <label>远端最新版本<div style="font-size:15px;color:var(--ink)" data-update-remote>未检查</div></label>
@@ -545,15 +594,19 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 </div>
 
 <script>
-window.CSRF_TOKEN = <?php echo wp_json_encode(csrf_token()); ?>;
-window.CONFIG = <?php echo wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-window.YIMAI_URI = <?php echo wp_json_encode($theme_uri); ?>;
+// 内联 script 上下文：必须用 JSON_HEX_TAG/AMP/APOS/QUOT，
+// 否则 JSON_UNESCAPED_SLASHES 会让 </script> 原样输出并提前闭合脚本标签。
+window.CSRF_TOKEN = <?php echo wp_json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.CONFIG = <?php echo wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.YIMAI_URI = <?php echo wp_json_encode($theme_uri, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+// 后台路径前缀由 PHP 推导（支持 WP 装在子目录），JS 侧不再硬编码 /admin
+window.YIMAI_ADMIN_BASE = <?php echo wp_json_encode(yimai_admin_path(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.YIMAI_IMGBED = {
-  domain: <?php echo wp_json_encode($imgbedDomain); ?>,
-  map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
+  domain: <?php echo wp_json_encode($imgbedDomain, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+  map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
 };
 </script>
-<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=7'); ?>"></script>
+<script src="<?php echo esc_url($theme_uri . '/assets/js/admin.js?v=' . rawurlencode(YIMAI_VERSION)); ?>"></script>
 <script>
 /* ---------- 在线更新 ---------- */
 (function () {
@@ -616,7 +669,7 @@ window.YIMAI_IMGBED = {
   }
   function check(silent) {
     if (!silent) { btnCheck.disabled = true; elStatus.textContent = '正在检查…'; }
-    return fetch('/admin/update-check', { headers: { 'X-CSRF-TOKEN': window.CSRF_TOKEN || '' } })
+    return fetch(window.YIMAI_ADMIN_BASE+'/update-check', { headers: { 'X-CSRF-TOKEN': window.CSRF_TOKEN || '' } })
       .then(function (r) { return r.json(); })
       .then(function (data) { applyCheck(data); })
       .catch(function () { if (!silent) elStatus.textContent = '网络错误，请重试'; })
@@ -633,7 +686,7 @@ window.YIMAI_IMGBED = {
     elLog.textContent = '更新中…';
     var fd = new FormData();
     fd.append('csrf_token', window.CSRF_TOKEN || '');
-    fetch('/admin/update-run', { method: 'POST', body: fd })
+    fetch(window.YIMAI_ADMIN_BASE+'/update-run', { method: 'POST', body: fd })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         elLog.style.display = 'block';

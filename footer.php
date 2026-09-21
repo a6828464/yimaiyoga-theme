@@ -54,20 +54,25 @@ $icpNumber = $site['icpNumber'] ?? '';
 $imgbedFallback = function_exists('yimai_imgbed_fallback_map') ? yimai_imgbed_fallback_map() : [];
 ?>
 <?php if ($imgbedFallback): ?>
-<script>window.YIMAI_IMG_FALLBACK = <?php echo wp_json_encode($imgbedFallback, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;</script>
+<script>window.YIMAI_IMG_FALLBACK = <?php echo wp_json_encode($imgbedFallback, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;</script>
 <?php endif; ?>
 <?php $notice = function_exists('yimai_active_announcement') ? yimai_active_announcement() : []; ?>
-<?php if ($notice): ?>
-<div class="notice-backdrop" data-notice-modal data-notice-id="<?php echo esc_attr($notice['id'] ?? ('act-' . md5((string) ($notice['title'] ?? '')))); ?>" role="dialog" aria-modal="true" aria-label="<?php echo esc_attr($notice['title'] ?? '活动公告'); ?>">
+<?php
+// 弹窗总开关：announcements.enabled（缺省 true=开启；后台关闭后不再弹）。
+// 仍需「存在启用中的活动」（$notice 非空）才输出弹窗。
+$noticeEnabled = !empty($config['announcements']['enabled'] ?? true);
+?>
+<?php if ($noticeEnabled && $notice): ?>
+<div class="notice-backdrop" data-notice-modal role="dialog" aria-modal="true" aria-labelledby="notice-title">
   <div class="notice-card">
     <button class="notice-close" type="button" data-notice-close aria-label="关闭公告">×</button>
     <?php if (!empty($notice['image'])): ?>
-      <div class="notice-media"><img src="<?php echo esc_url(yimai_image_url($notice['image'])); ?>" alt="<?php echo esc_attr($notice['title'] ?? '活动配图'); ?>"></div>
+      <div class="notice-media"><img src="<?php echo esc_url(yimai_image_url($notice['image'])); ?>" alt="<?php echo esc_attr($notice['title'] ?? '活动配图'); ?>" loading="lazy"></div>
     <?php endif; ?>
     <div class="notice-body">
       <p class="notice-eyebrow">Yi Mai · 活动通知</p>
-      <h3><?php echo esc_html($notice['title'] ?? ''); ?></h3>
-      <div class="notice-content"><?php echo wp_kses_post(nl2br(esc_html($notice['content'] ?? ''))); ?></div>
+      <h3 id="notice-title"><?php echo esc_html($notice['title'] ?? ''); ?></h3>
+      <div class="notice-content"><?php echo nl2br(esc_html($notice['content'] ?? '')); ?></div>
       <?php $noticeLink = yimai_notice_link($notice); ?>
       <?php if ($noticeLink): ?>
         <a class="button primary notice-cta" href="<?php echo esc_url($noticeLink); ?>"><?php echo esc_html(trim((string) ($notice['linkText'] ?? '')) !== '' ? $notice['linkText'] : '查看详情'); ?></a>

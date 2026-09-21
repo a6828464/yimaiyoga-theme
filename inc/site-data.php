@@ -4,6 +4,135 @@
  * Theme: yimaiyoga
  */
 
+/**
+ * 是否为「列表」（从 0 开始的连续整数键）。
+ * 配置合并语义依赖此判断：列表必须整体替换，映射才逐键合并。
+ */
+function yimai_is_list(array $value): bool
+{
+    if (function_exists('array_is_list')) {
+        return array_is_list($value);
+    }
+    $i = 0;
+    foreach ($value as $key => $_) {
+        if ($key !== $i++) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * 配置深合并（唯一的合并语义 owner，前台与后台共用）。
+ *
+ * 与 array_replace_recursive 的关键区别：**列表整体替换，映射逐键合并**。
+ * array_replace_recursive 对数字索引是逐下标替换、不缩短，导致「删除列表项」时
+ * 默认值的尾部被补回来（删 1 条反而变成 8 条，删中间项还会产生重复）。
+ *
+ * @param array $default 默认结构（提供缺失键）
+ * @param array $override 覆盖值（列表按原样整体替换）
+ */
+function yimai_deep_merge(array $default, array $override): array
+{
+    $result = $default;
+    foreach ($override as $key => $value) {
+        $base = $default[$key] ?? null;
+        if (is_array($value) && is_array($base)
+            && !yimai_is_list($value) && !yimai_is_list($base)) {
+            $result[$key] = yimai_deep_merge($base, $value);
+            continue;
+        }
+        // 列表、标量、类型不一致：整体替换
+        $result[$key] = $value;
+    }
+    return $result;
+}
+
+/** 类型不合法时抛出，供后台转成 400 响应而不是写坏数据。 */
+class Yimai_Config_Type_Error extends InvalidArgumentException
+{
+}
+
+/**
+ * 按默认结构校验并规范化配置值（递归）。
+ *
+ * 只校验默认结构里「已知」的键；未知键原样保留（前台不读，无风险）。
+ * 目的是杜绝「一次误存把标量写成字符串 → 全站 TypeError 白屏」。
+ *
+ * @throws Yimai_Config_Type_Error 类型不匹配且无法安全转换时
+ */
+function yimai_config_validate(mixed $value, mixed $default, string $path): mixed
+{
+    // 默认是列表：必须给数组（允许空数组＝清空）
+    if (is_array($default) && yimai_is_list($default)) {
+        if (!is_array($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为列表（数组）');
+        }
+        if (!yimai_is_list($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为列表（键需从 0 连续递增）');
+        }
+        return array_values($value);
+    }
+
+    // 默认是映射：必须给数组，逐键递归校验
+    if (is_array($default)) {
+        if (!is_array($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为对象（数组）');
+        }
+        if (yimai_is_list($value) && $value !== []) {
+            throw new Yimai_Config_Type_Error($path . ' 应为对象（数组），收到列表');
+        }
+        $out = [];
+        foreach ($value as $key => $item) {
+            // 未知键原样保留：不参与校验，也不被丢弃
+            $out[$key] = array_key_exists($key, $default)
+                ? yimai_config_validate($item, $default[$key], $path . '.' . $key)
+                : $item;
+        }
+        // 补齐默认键，保证结构完整
+        foreach ($default as $key => $item) {
+            if (!array_key_exists($key, $out)) {
+                $out[$key] = $item;
+            }
+        }
+        return $out;
+    }
+
+    if (is_bool($default)) {
+        return (bool) $value;
+    }
+    if (is_int($default)) {
+        if (is_array($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为整数');
+        }
+        if (is_string($value) && trim($value) !== '' && !is_numeric(trim($value))) {
+            throw new Yimai_Config_Type_Error($path . ' 应为整数');
+        }
+        return $value === '' || $value === null ? $default : (int) $value;
+    }
+    if (is_float($default)) {
+        if (is_array($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为数字');
+        }
+        return is_numeric($value) ? (float) $value : $default;
+    }
+    if (is_string($default)) {
+        if (is_array($value)) {
+            throw new Yimai_Config_Type_Error($path . ' 应为文本');
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '';
+        }
+        return (string) $value;
+    }
+    if ($default === null) {
+        return $value;
+    }
+
+    // 兜底：按默认值的类型强制
+    return $value;
+}
+
 function yimai_site_data(bool $with_db = true): array
 {
     $default = [
@@ -554,6 +683,16 @@ function yimai_site_data(bool $with_db = true): array
             'stripEnabled' => true,
             'items' => [],
         ],
+        // 预约表单「体验方向」下拉项（与门店一样走配置，避免前台硬编码）
+        'booking' => [
+            'interests' => [
+                '精品团课',
+                '私教小班',
+                '定制私教',
+                '体态评估',
+                'RYT200教培',
+            ],
+        ],
         'training_rights' => [
             '赠送专业瑜伽服 1 套',
             '一年内免费复训 1 次',
@@ -563,14 +702,15 @@ function yimai_site_data(bool $with_db = true): array
     ];
 
     // 数据库配置覆盖（后台 /admin 保存的 yimai_site_config）。
-    // with_db=false 返回纯默认结构：save_config 用它做合并基准，
-    // 否则空列表（如清空公告）会被旧数据库值重新填回来（array_replace_recursive 对空数组无键可替换）。
+    // with_db=false 返回纯默认结构（save_config 的校验基准）。
+    // 合并走 yimai_deep_merge：列表整体替换、映射逐键合并，
+    // 因此「删到比默认少」或「清空」都会如实生效，默认值不会被补回。
     if ($with_db) {
         $db_raw = get_option('yimai_site_config', '');
         if ($db_raw) {
             $db_cfg = json_decode((string) $db_raw, true);
             if (is_array($db_cfg)) {
-                return array_replace_recursive($default, $db_cfg);
+                return yimai_deep_merge($default, $db_cfg);
             }
         }
     }

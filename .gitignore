@@ -8,3 +8,8 @@ inc/local-secrets.php
 # 系统
 .DS_Store
 *.bak-*
+Thumbs.db
+
+# 测试临时产物
+/tests/tmp/
+

@@ -1,4 +1,6 @@
 (function(){
+  // 后台路径前缀由 PHP 注入（支持 WP 子目录安装）
+  var ADMIN_BASE = window.YIMAI_ADMIN_BASE || '/admin';
   var root=document.querySelector('[data-admin-form]');
   if(!root){return}
   var hidden=root.querySelector('[data-config-json]');
@@ -140,7 +142,7 @@
       var fd=new FormData();
       fd.append('csrf_token',window.CSRF_TOKEN||'');
       fd.append('path',value);
-      fetch('/admin/imgbed-sync',{method:'POST',body:fd})
+      fetch(ADMIN_BASE+'/imgbed-sync',{method:'POST',body:fd})
         .then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})})
         .then(function(data){
           rememberImgbed(value,data.imgbed);
@@ -321,7 +323,7 @@
     fd.append('field',path||'');
     msg('上传中...');
     var side=currentSide(path);
-    fetch('/admin/upload',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){
+    fetch(ADMIN_BASE+'/upload',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){
       var value=data.path;
       if(side==='imgbed'&&data.imgbed){
         value=data.imgbed;
@@ -450,7 +452,7 @@
     else{
       var grid=modal.querySelector('[data-library-grid]');
       grid.innerHTML='<p class="hint" style="padding:20px">正在加载图片库…</p>';
-      fetch('/admin/library',{headers:{'X-CSRF-TOKEN':window.CSRF_TOKEN||''}})
+      fetch(ADMIN_BASE+'/library',{headers:{'X-CSRF-TOKEN':window.CSRF_TOKEN||''}})
         .then(function(r){return r.json()})
         .then(function(d){LIB.data=(d&&d.items)||[];renderLibrary()})
         .catch(function(){grid.innerHTML='<p class="hint" style="padding:20px">加载失败，请关闭后重试</p>'});
@@ -524,7 +526,7 @@
     try{syncAll()}catch(e){msg(e.message);return}
     var fd=new FormData(root);
     msg('保存中...');
-    fetch('/admin/save',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){
+    fetch(ADMIN_BASE+'/save',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){
       msg((data.message||'已保存')+' ✓ 已写入，前台刷新（Ctrl+F5）可见');
       saveBtn.classList.add('done');
     }).catch(function(error){msg(error.message||'保存失败')});
@@ -553,7 +555,7 @@
       fd.append('old_password',oldPwd.value);
       fd.append('new_password',newPwd.value);
       pmsg.textContent='修改中...';
-      fetch('/admin/changepass',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){pmsg.textContent=data.message||'已修改';oldPwd.value='';newPwd.value=''}).catch(function(error){pmsg.textContent=error.message||'修改失败'});
+      fetch(ADMIN_BASE+'/changepass',{method:'POST',body:fd}).then(function(res){return res.json().then(function(data){if(!res.ok){throw data}return data})}).then(function(data){pmsg.textContent=data.message||'已修改';oldPwd.value='';newPwd.value=''}).catch(function(error){pmsg.textContent=error.message||'修改失败'});
     });
   }
 

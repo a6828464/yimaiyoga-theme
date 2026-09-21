@@ -17,7 +17,7 @@ $images   = $config['images'] ?? [];
   <img src="<?php echo esc_url(yimai_image_url($images['homeHero'] ?? '')); ?>" alt="一麦瑜伽空间" fetchpriority="high">
   <div class="hero-copy">
     <p class="eyebrow muted-light"><?php echo esc_html($copy['heroEyebrow'] ?? ''); ?></p>
-    <h1><?php echo wp_kses_post(nl2br(esc_html($copy['heroTitle'] ?? ''))); ?></h1>
+    <h1><?php echo nl2br(esc_html($copy['heroTitle'] ?? '')); ?></h1>
     <p><?php echo esc_html($copy['heroDescription'] ?? ''); ?></p>
     <span><?php echo esc_html($copy['heroNote'] ?? ''); ?></span>
   </div>
@@ -52,7 +52,7 @@ $images   = $config['images'] ?? [];
   <?php foreach ($config['classPaths'] ?? [] as $path): ?>
     <article>
       <p class="eyebrow"><?php echo esc_html($path['title'] ?? ''); ?></p>
-      <p><?php echo esc_html($path['description'] ?? ''); ?></p>
+      <h3 class="path-strip-description"><?php echo esc_html($path['description'] ?? ''); ?></h3>
     </article>
   <?php endforeach; ?>
 </section>

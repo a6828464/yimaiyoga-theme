@@ -31,27 +31,34 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once YIMAI_THEME_DIR . '/inc/updater.php';
 
+// 一次性安全迁移：作废旧版可推导默认口令（幂等，只真正执行一次）
+yimai_migrate_legacy_default_password();
+
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $path = rtrim((string) $path, '/') ?: '/admin';
 
 switch (true) {
     case $path === '/admin/login':
         if (request_method() === 'POST') {
-            verify_csrf();
+            verify_csrf(true);
             $username = trim((string) wp_unslash($_POST['username'] ?? ''));
             $password = (string) wp_unslash($_POST['password'] ?? '');
+            if (admin_is_locked_out()) {
+                $_SESSION['flash_error'] = '尝试次数过多，请 ' . ceil(admin_lockout_remaining() / 60) . ' 分钟后再试';
+                redirect_to(yimai_admin_path('login'));
+            }
             if (admin_login($username, $password)) {
-                redirect_to('/admin');
+                redirect_to(yimai_admin_path());
             }
             $_SESSION['flash_error'] = '账号或密码错误';
-            redirect_to('/admin/login');
+            redirect_to(yimai_admin_path('login'));
         }
         render_view('login');
         break;
 
     case $path === '/admin/logout':
         admin_logout();
-        redirect_to('/admin/login');
+        redirect_to(yimai_admin_path('login'));
         break;
 
     case $path === '/admin/save':
@@ -68,6 +75,9 @@ switch (true) {
         try {
             save_config($config);
             json_response(['message' => '已保存']);
+        } catch (Yimai_Config_Type_Error $error) {
+            // 类型不符：明确告知字段路径，不写库
+            json_response(['message' => '配置类型不正确：' . $error->getMessage()], 400);
         } catch (Throwable $error) {
             json_response(['message' => '保存失败：' . $error->getMessage()], 500);
         }
@@ -79,7 +89,12 @@ switch (true) {
             json_response(['message' => 'Method Not Allowed'], 405);
         }
         verify_csrf();
-        $result = save_uploaded_image($_FILES['file'] ?? [], (string) wp_unslash($_POST['field'] ?? ''));
+        try {
+            $result = save_uploaded_image($_FILES['file'] ?? [], (string) wp_unslash($_POST['field'] ?? ''));
+        } catch (Throwable $error) {
+            // 任何未预期异常都返回可读错误，而不是 500 白页
+            json_response(['message' => '上传失败：' . $error->getMessage()], 500);
+        }
         if (!$result['ok']) {
             json_response(['message' => $result['message']], 400);
         }

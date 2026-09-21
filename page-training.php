@@ -16,7 +16,7 @@ $rights    = $config['training_rights'] ?? [];
 <section class="page-hero reveal">
   <div>
     <p class="eyebrow"><?php echo esc_html($copy['eyebrow'] ?? ''); ?></p>
-    <h1><?php echo wp_kses_post(nl2br(esc_html($copy['title'] ?? ''))); ?></h1>
+    <h1><?php echo nl2br(esc_html($copy['title'] ?? '')); ?></h1>
   </div>
   <?php if (!empty($copy['sideDescription'])): ?>
     <aside>

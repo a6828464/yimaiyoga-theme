@@ -15,7 +15,7 @@ $faqs   = yimai_faqs();
 <section class="page-hero reveal">
   <div>
     <p class="eyebrow"><?php echo esc_html($copy['eyebrow'] ?? ''); ?></p>
-    <h1><?php echo wp_kses_post(nl2br(esc_html($copy['title'] ?? ''))); ?></h1>
+    <h1><?php echo nl2br(esc_html($copy['title'] ?? '')); ?></h1>
   </div>
   <?php if (!empty($copy['sideDescription'])): ?>
     <aside>
@@ -25,11 +25,7 @@ $faqs   = yimai_faqs();
   <?php endif; ?>
 </section>
 
-<section class="membership-rows page-block">
-  <?php foreach (yimai_memberships() as $index => $plan): ?>
-    <article class="reveal"><span>0<?php echo (int) $index + 1; ?></span><div><em><?php echo esc_html($plan['accent']); ?></em><h2><?php echo esc_html($plan['name']); ?></h2></div><p><?php echo esc_html($plan['feature']); ?></p><strong><?php echo esc_html($plan['label']); ?></strong></article>
-  <?php endforeach; ?>
-</section>
+<?php get_template_part('template-parts/membership-rows'); ?>
 
 <section class="contact-grid page-block">
   <div>
@@ -41,7 +37,17 @@ $faqs   = yimai_faqs();
     <p class="eyebrow muted-light"><?php echo esc_html($copy['faqEyebrow'] ?? ''); ?></p>
     <h2><?php echo esc_html($copy['faqTitle'] ?? ''); ?></h2>
     <?php foreach ($faqs as $faq): ?>
-      <details><summary><?php echo esc_html($faq[0]); ?></summary><p><?php echo esc_html($faq[1]); ?></p></details>
+      <?php
+      /*
+       * FAQ 形状守卫：默认数据是数字索引元组 ["问题","回答"]，
+       * 而后台「新增」路径写入的是 {q,a} 字符串键，两种形状都要能渲染，
+       * 避免 PHP 8 下 Undefined array key warning 与空白条目。
+       */
+      $faq = is_array($faq) ? $faq : [];
+      $faqQ = $faq[0] ?? ($faq['q'] ?? '');
+      $faqA = $faq[1] ?? ($faq['a'] ?? '');
+      ?>
+      <details><summary><?php echo esc_html($faqQ); ?></summary><p><?php echo esc_html($faqA); ?></p></details>
     <?php endforeach; ?>
   </div>
 </section>

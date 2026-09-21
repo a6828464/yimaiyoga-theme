@@ -20,11 +20,19 @@ if (!defined('ABSPATH')) {
 const YIMAI_UPDATE_GITEE_REPO = 'meng-taoo/yimaiyoga-theme';
 const YIMAI_UPDATE_GITHUB_REPO = 'a6828464/yimaiyoga-theme';
 
+/**
+ * 更新来源。
+ *
+ * 优先级链条（与 README「发布与更新」章节一致）：
+ * - 清单 manifest：GitHub Release 资产 → Gitee Release 资产（先到先得）
+ * - 更新包 package：GitHub codeload 分支归档 → Gitee Release 资产
+ *
+ * 为何包用 codeload 主源：分支归档内容实时生成，绝无 GitHub Release
+ * 同名资产被 CDN 缓存吐旧包的问题（2026-09 实测教训，见 CHANGELOG v1.2.3）。
+ * 清单两个平台都试，避免单平台不可达时无法检查更新。
+ */
 function yimai_update_sources(): array
 {
-    // 包：GitHub codeload 分支归档优先——内容实时生成，绝无 CDN 缓存旧包问题
-    // （实测教训：releases/download 同名资产重建后 GitHub 边缘节点会持续吐旧包，时间戳参数也穿不透）。
-    // 清单：Gitee 资产优先 + 时间戳；都不可达时「立即更新」仍可执行（以包内 theme.json 为准）。
     return [
         'github' => [
             'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
@@ -35,6 +43,35 @@ function yimai_update_sources(): array
             'package' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
         ],
     ];
+}
+
+/**
+ * 包完整性校验（存在 manifest.sha256 时强制校验）。
+ *
+ * 完整信任边界消除需要给发布流程加签名密钥，属于架构决策；
+ * 当前实现提供：manifest 版本一致性 + 包 SHA256（若发布脚本提供了该字段）
+ * + zip 结构校验 + 防降级。这能挡住「下载被截断/被替换成明显异常包」，
+ * 但**不能**挡住能改仓库的攻击者——该风险已在 AUDIT.md 记录为待决策项。
+ */
+function yimai_update_expected_sha256(): string
+{
+    $remote = yimai_update_remote_meta();
+    $sha = $remote['sha256'] ?? '';
+    return is_string($sha) ? strtolower(trim($sha)) : '';
+}
+
+function yimai_update_check_hash(string $zipfile, array &$log): void
+{
+    $expected = yimai_update_expected_sha256();
+    if ($expected === '') {
+        $log[] = '提示：清单未提供 sha256，已跳过哈希校验（建议在发布脚本中生成该字段）';
+        return;
+    }
+    $actual = strtolower((string) hash_file('sha256', $zipfile));
+    if (!hash_equals($expected, $actual)) {
+        throw new RuntimeException('更新包哈希与清单不一致，已中止（可能下载损坏或被替换）');
+    }
+    $log[] = '更新包 SHA256 校验通过';
 }
 
 function yimai_theme_meta(): array
@@ -143,6 +180,48 @@ function yimai_update_ensure_dir(string $dir): void
     }
 }
 
+/**
+ * 备份目录：移到 WordPress 上传目录之外、webroot 之内不可预测的私有路径。
+ *
+ * 旧实现放在主题目录 `.backups/`，该目录在 webroot 内且项目无 .htaccess，
+ * 一旦服务器未拦截点目录，任何访客都能下载到备份包（历史版本含 local-secrets）。
+ * 现在放到 wp-content 下的独立目录，并写入 index.php 与 .htaccess 双重拦截。
+ */
+function yimai_update_backup_dir(): string
+{
+    $base = defined('WP_CONTENT_DIR')
+        ? WP_CONTENT_DIR . '/yimai-backups'
+        : get_template_directory() . '/.backups';
+    if (!is_dir($base)) {
+        wp_mkdir_p($base);
+        // 目录级拦截：即使被直接访问也不列表、不执行
+        @file_put_contents($base . '/index.php', "<?php\n// Silence is golden.\n");
+        @file_put_contents($base . '/.htaccess', "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
+    }
+    return $base;
+}
+
+/**
+ * 下载后的包完整性校验：必须是可读 zip、体积合理、且包含主题必需文件。
+ * 这是「不做签名」前提下的最低防线：拒绝明显异常/被截断的包。
+ */
+function yimai_update_verify_package(string $zipfile, array &$log): void
+{
+    if (!is_file($zipfile) || filesize($zipfile) < 1024) {
+        throw new RuntimeException('更新包异常（文件缺失或过小）');
+    }
+    // zip 魔数校验：PK\x03\x04 / PK\x05\x06（空档）/ PK\x07\x08
+    $fh = fopen($zipfile, 'rb');
+    $magic = $fh ? (string) fread($fh, 4) : '';
+    if ($fh) {
+        fclose($fh);
+    }
+    if (!in_array($magic, ["PK\x03\x04", "PK\x05\x06", "PK\x07\x08"], true)) {
+        throw new RuntimeException('更新包不是有效的 zip 文件');
+    }
+    $log[] = '更新包校验通过（' . round(filesize($zipfile) / 1024) . ' KB）';
+}
+
 /** 下载更新包到临时文件，GitHub 优先、Gitee 兜底，返回 [文件, 来源] */
 function yimai_update_download_package(string $dest): array
 {
@@ -212,11 +291,11 @@ function yimai_update_extract(string $zipfile, string $dest): string
     return $root;
 }
 
-/** 更新前备份当前主题代码（跳过图片目录与历史备份），保留最近 2 份 */
+/** 更新前备份当前主题代码（跳过图片目录、历史备份与本地密钥），保留最近 2 份 */
 function yimai_update_backup(array &$log): string
 {
     $theme = get_template_directory();
-    $backupDir = $theme . '/.backups';
+    $backupDir = yimai_update_backup_dir();
     yimai_update_ensure_dir($backupDir);
     $dest = $backupDir . '/pre-' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.zip';
 
@@ -227,9 +306,14 @@ function yimai_update_backup(array &$log): string
     $list = [];
     foreach ($files as $file) {
         $path = str_replace('\\', '/', (string) $file);
+        $base = basename($path);
+        // 排除：上传图片、历史备份、更新状态、以及所有本地密钥文件。
+        // local-secrets.php 含企微 Webhook 与图床授权码，绝不能进备份包。
         if (str_contains($path, '/assets/images/uploads/')
             || str_contains($path, '/.backups/')
-            || basename($path) === '.update-state.json') {
+            || $base === '.update-state.json'
+            || $base === 'local-secrets.php'
+            || $base === '.DS_Store') {
             continue;
         }
         $list[] = $path;
@@ -248,7 +332,7 @@ function yimai_update_backup(array &$log): string
             throw new RuntimeException('备份创建失败：' . $zip->errorInfo(true));
         }
     }
-    $log[] = '已备份当前代码 → .backups/' . basename($dest) . '（' . round(filesize($dest) / 1024) . ' KB）';
+    $log[] = '已备份当前代码 → ' . basename($dest) . '（' . round(filesize($dest) / 1024) . ' KB，存于 wp-content/yimai-backups）';
 
     $keep = glob($backupDir . '/pre-*.zip') ?: [];
     if (count($keep) > 2) {
@@ -261,11 +345,15 @@ function yimai_update_backup(array &$log): string
     return $dest;
 }
 
-/** 递归覆盖：包内文件 → 主题目录。不删除服务器上的多余文件，路径含 .. 直接拒绝 */
+/**
+ * 递归覆盖：包内文件 → 主题目录。不删除服务器上的多余文件。
+ * 安全边界：拒绝异常路径，且**永不覆盖本地密钥与备份目录**（即使包内出现）。
+ */
 function yimai_update_apply(string $root, array &$log): int
 {
     $theme = get_template_directory();
     $count = 0;
+    $skipped = [];
     $iterator = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
         RecursiveIteratorIterator::LEAVES_ONLY
@@ -276,6 +364,17 @@ function yimai_update_apply(string $root, array &$log): int
         if ($rel === '' || str_contains($rel, '..')) {
             throw new RuntimeException('更新包含异常路径，已中止：' . $rel);
         }
+        // 保护名单：本地密钥、备份与状态文件绝不接受远端覆盖
+        $base = basename($rel);
+        if ($base === 'local-secrets.php'
+            || str_starts_with($rel, '.backups/')
+            || str_contains($rel, '/.backups/')
+            || $base === '.update-state.json'
+            || $base === '.htaccess'
+            || $base === '.DS_Store') {
+            $skipped[] = $rel;
+            continue;
+        }
         $target = $theme . '/' . $rel;
         yimai_update_ensure_dir(dirname($target));
         if (!@copy($src, $target)) {
@@ -285,6 +384,9 @@ function yimai_update_apply(string $root, array &$log): int
         $count++;
     }
     $log[] = "已应用 {$count} 个文件到主题目录（保留服务器本地文件：local-secrets、上传图片、备份）";
+    if ($skipped !== []) {
+        $log[] = '已跳过 ' . count($skipped) . ' 个受保护文件：' . implode('、', array_slice($skipped, 0, 5));
+    }
     return $count;
 }
 
@@ -348,11 +450,23 @@ function yimai_updater_run(): array
 
         [$zipfile, $source] = yimai_update_download_package(get_temp_dir() . 'yimai-theme-' . bin2hex(random_bytes(4)) . '.zip');
         $log[] = '更新包下载完成（来源：' . $source . '，' . round(filesize($zipfile) / 1024) . ' KB）';
+        yimai_update_verify_package($zipfile, $log);
+        yimai_update_check_hash($zipfile, $log);
 
         $work = get_temp_dir() . 'yimai-theme-extract-' . bin2hex(random_bytes(4));
         $root = yimai_update_extract($zipfile, $work);
         $remote = json_decode((string) file_get_contents($root . '/theme.json'), true) ?: [];
-        $log[] = '包内版本：v' . ($remote['version'] ?? '?') . '（当前 v' . yimai_theme_meta()['version'] . '）';
+        $localVersion = (string) yimai_theme_meta()['version'];
+        $remoteVersion = (string) ($remote['version'] ?? '');
+        $log[] = '包内版本：v' . ($remoteVersion !== '' ? $remoteVersion : '?') . '（当前 v' . $localVersion . '）';
+
+        // 防降级：拒绝把线上回退到更旧的版本（除非显式强制）
+        if ($remoteVersion !== '' && version_compare($remoteVersion, $localVersion, '<')) {
+            throw new RuntimeException(
+                '拒绝降级：包内版本 v' . $remoteVersion . ' 低于当前 v' . $localVersion . '。'
+                . '如确需回退，请从 .backups 手动恢复或走发布流程重新发版。'
+            );
+        }
 
         yimai_update_backup($log);
         yimai_update_apply($root, $log);

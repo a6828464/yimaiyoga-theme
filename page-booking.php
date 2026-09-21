@@ -10,7 +10,6 @@ get_header();
 $config = yimai_config();
 $copy   = $config['copy']['booking'] ?? [];
 $images = $config['images'] ?? [];
-$notice = function_exists('yimai_active_announcement') ? yimai_active_announcement() : [];
 ?>
 <?php
 $notice = function_exists('yimai_active_announcement') ? yimai_active_announcement() : [];
@@ -35,11 +34,7 @@ $stripOn = ($config['announcements']['stripEnabled'] ?? true) && $notice;
   <img src="<?php echo esc_url(yimai_image_url($images['studioHero'] ?? '')); ?>" alt="一麦空间光影" loading="lazy">
   <div><p class="eyebrow muted-light"><?php echo esc_html($config['copy']['studio']['heroEyebrow'] ?? ''); ?></p><h2><?php echo esc_html($config['copy']['studio']['heroTitle'] ?? ''); ?></h2></div>
 </section>
-<section class="studio-grid page-block">
-  <?php foreach (yimai_studios() as $index => $studio): $img = $images['studioImages'][$index] ?? ($images['studioHero'] ?? ''); ?>
-    <article class="reveal"><img src="<?php echo esc_url(yimai_image_url($img)); ?>" alt="<?php echo esc_attr($studio['name']); ?>" loading="lazy"><div><h2><?php echo esc_html($studio['name']); ?></h2><p><?php echo esc_html($studio['address']); ?></p><strong><?php echo esc_html($studio['area']); ?></strong><span><?php echo esc_html($studio['phone']); ?></span></div></article>
-  <?php endforeach; ?>
-</section>
+<?php get_template_part('template-parts/studio-cards', null, ['images' => $images]); ?>
 <section class="booking-section compact">
   <div class="section-intro reveal">
     <p class="eyebrow"><?php echo esc_html($config['copy']['studio']['sideEyebrow'] ?? ''); ?></p>
