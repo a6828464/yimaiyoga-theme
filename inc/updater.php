@@ -60,18 +60,71 @@ function yimai_update_expected_sha256(): string
     return is_string($sha) ? strtolower(trim($sha)) : '';
 }
 
-function yimai_update_check_hash(string $zipfile, array &$log): void
+/**
+ * 计算解压目录的**内容哈希**：按「相对路径 + 文件内容哈希」聚合，与 zip 字节无关。
+ *
+ * 为什么不能用 zip 字节哈希：主更新源是 GitHub codeload 的分支归档，由服务端
+ * 按需生成，其 zip 元数据（时间戳/压缩实现/条目顺序）与发布脚本自己打的 release
+ * zip 不同——同一个 commit 两边字节不同（实测 529bee34… vs de8d48ac…）。若比对
+ * zip 字节哈希，主源会必然校验失败，导致「立即更新」完全不可用。
+ *
+ * 排除规则必须与 tools/release.sh 的 content_sha256 保持一致。
+ */
+function yimai_update_content_sha256(string $root): string
+{
+    $items = [];
+    $normalizedRoot = rtrim(str_replace('\\', '/', $root), '/');
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+    foreach ($iterator as $file) {
+        if (!$file->isFile()) {
+            continue;
+        }
+        $path = str_replace('\\', '/', (string) $file);
+        $rel = ltrim(substr($path, strlen($normalizedRoot)), '/');
+        $base = basename($rel);
+        // 与发布脚本一致的排除项：不参与内容哈希
+        if ($base === 'local-secrets.php'
+            || $base === '.update-state.json'
+            || $base === '.DS_Store'
+            || str_starts_with($rel, '.git')
+            || str_starts_with($rel, '.backups/')
+            || str_starts_with($rel, 'tests/')
+            || str_starts_with($rel, 'tools/')) {
+            continue;
+        }
+        $items[$rel] = (string) hash_file('sha256', $path);
+    }
+    ksort($items, SORT_STRING);
+    $ctx = hash_init('sha256');
+    foreach ($items as $rel => $hash) {
+        hash_update($ctx, $rel . "\0" . $hash . "\n");
+    }
+    return hash_final($ctx);
+}
+
+/**
+ * 校验解压后的内容哈希是否与清单一致。
+ *
+ * @param string $root 已解压的主题根目录
+ */
+function yimai_update_check_hash(string $root, array &$log): void
 {
     $expected = yimai_update_expected_sha256();
     if ($expected === '') {
-        $log[] = '提示：清单未提供 sha256，已跳过哈希校验（建议在发布脚本中生成该字段）';
+        $log[] = '提示：清单未提供内容哈希，已跳过校验（建议发布脚本生成该字段）';
         return;
     }
-    $actual = strtolower((string) hash_file('sha256', $zipfile));
+    $actual = yimai_update_content_sha256($root);
     if (!hash_equals($expected, $actual)) {
-        throw new RuntimeException('更新包哈希与清单不一致，已中止（可能下载损坏或被替换）');
+        throw new RuntimeException(
+            '更新包内容与清单不一致，已中止。'
+            . '可能原因：下载损坏、包被替换，或该版本由旧发布脚本生成（未含内容哈希）。'
+        );
     }
-    $log[] = '更新包 SHA256 校验通过';
+    $log[] = '更新包内容哈希校验通过';
 }
 
 function yimai_theme_meta(): array
@@ -451,10 +504,11 @@ function yimai_updater_run(): array
         [$zipfile, $source] = yimai_update_download_package(get_temp_dir() . 'yimai-theme-' . bin2hex(random_bytes(4)) . '.zip');
         $log[] = '更新包下载完成（来源：' . $source . '，' . round(filesize($zipfile) / 1024) . ' KB）';
         yimai_update_verify_package($zipfile, $log);
-        yimai_update_check_hash($zipfile, $log);
 
         $work = get_temp_dir() . 'yimai-theme-extract-' . bin2hex(random_bytes(4));
         $root = yimai_update_extract($zipfile, $work);
+        // 内容哈希校验在解压之后：比对的是文件内容，与 zip 打包方式无关
+        yimai_update_check_hash($root, $log);
         $remote = json_decode((string) file_get_contents($root . '/theme.json'), true) ?: [];
         $localVersion = (string) yimai_theme_meta()['version'];
         $remoteVersion = (string) ($remote['version'] ?? '');

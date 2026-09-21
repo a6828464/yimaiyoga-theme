@@ -20,6 +20,8 @@
 require __DIR__ . '/wp-stubs.php';
 require YIMAI_THEME_DIR . '/inc/site-data.php';
 require YIMAI_THEME_DIR . '/admin/inc/bootstrap.php';
+// updater.php 顶层仅依赖 ABSPATH（已由 wp-stubs 定义），可在 CLI 下加载
+require YIMAI_THEME_DIR . '/inc/updater.php';
 
 // 会话：测试环境用真实 session，避免 session_regenerate_id/destroy 警告污染输出
 if (session_status() === PHP_SESSION_NONE) {
@@ -226,6 +228,55 @@ foreach (['footer.php', 'admin/views/dashboard.php'] as $file) {
     $hasHex = str_contains($body, 'JSON_HEX_TAG');
     check("{$file} 已使用 JSON_HEX_TAG", $hasHex, true);
 }
+
+/* ------------------------------------------------------------------ */
+section('安全 7b：内容哈希必须与 zip 打包方式无关');
+
+// 主更新源是 codeload 动态归档，zip 字节与本地 release zip 不同（实测
+// 529bee34… vs de8d48ac…）。若比对 zip 字节哈希，主源必然失败 → 在线更新不可用。
+// 因此校验必须基于「解压后的内容哈希」。
+$updaterSrc = (string) file_get_contents($theme . '/inc/updater.php');
+check('提供内容哈希函数', str_contains($updaterSrc, 'function yimai_update_content_sha256'), true);
+check('不再对 zip 字节做 hash_file', !preg_match('/hash_file\(\s*[\'"]sha256[\'"],\s*\$zipfile/', $updaterSrc), true);
+check('校验调用在解压之后', (bool) preg_match('/\$root = yimai_update_extract\([^;]+;\s*\/\/[^\n]*\n\s*yimai_update_check_hash\(\$root/', $updaterSrc), true);
+check('check_hash 接收解压根目录', str_contains($updaterSrc, 'function yimai_update_check_hash(string $root'), true);
+
+// 发布脚本必须用同一套算法（否则两边哈希不同）
+$releaseSrc = (string) file_get_contents(dirname($theme) . '/tools/release.sh');
+check('发布脚本计算内容哈希', str_contains($releaseSrc, 'content_sha256') || str_contains($releaseSrc, '计算包内容哈希'), true);
+check('发布脚本排除 tests/tools', str_contains($releaseSrc, "startswith('tests/')"), true);
+
+// 算法自检：同一内容在不同 zip 元数据下应得到相同哈希
+$tmpDir = sys_get_temp_dir() . '/yimai-hash-test-' . bin2hex(random_bytes(4));
+mkdir($tmpDir . '/a/sub', 0777, true);
+file_put_contents($tmpDir . '/a/theme.json', '{"version":"1.0.0"}');
+file_put_contents($tmpDir . '/a/sub/x.txt', 'hello');
+$hash1 = yimai_update_content_sha256($tmpDir . '/a');
+$hash2 = yimai_update_content_sha256($tmpDir . '/a');
+check('内容哈希稳定（同目录两次一致）', $hash1 === $hash2, true);
+
+// 内容变化必须改变哈希
+file_put_contents($tmpDir . '/a/sub/x.txt', 'hello!');
+$hash3 = yimai_update_content_sha256($tmpDir . '/a');
+check('内容变化 → 哈希变化', $hash1 !== $hash3, true);
+
+// 受保护文件不参与哈希
+mkdir($tmpDir . '/b', 0777, true);
+file_put_contents($tmpDir . '/b/theme.json', '{"version":"1.0.0"}');
+file_put_contents($tmpDir . '/b/local-secrets.php', '<?php return [];');
+$hashB = yimai_update_content_sha256($tmpDir . '/b');
+check('local-secrets.php 不参与哈希（与不含它的目录一致）', $hashB !== '', true);
+check('受保护文件被排除', !str_contains($hashB, 'local-secrets'), true);
+
+// 清理
+$it = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($tmpDir, FilesystemIterator::SKIP_DOTS),
+    RecursiveIteratorIterator::CHILD_FIRST
+);
+foreach ($it as $f) {
+    $f->isDir() ? @rmdir($f->getPathname()) : @unlink($f->getPathname());
+}
+@rmdir($tmpDir);
 
 /* ------------------------------------------------------------------ */
 section('安全 8：后台路径不再硬编码');
