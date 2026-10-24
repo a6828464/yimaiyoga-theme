@@ -158,13 +158,19 @@ function yimai_update_state(): array
 }
 
 /** 依次尝试各发布渠道拉取远端 theme.json */
-function yimai_update_remote_meta(?string &$source_used = null): array
+function yimai_update_remote_meta(?string &$source_used = null, ?array &$failLog = null): array
 {
     foreach (yimai_update_sources() as $source => $urls) {
         // 加时间戳破缓存：GitHub/Gitee 对同名 Release 资产有 CDN 缓存，重建同名 Release 后可能仍吐旧文件
         $url = $urls['manifest'] . (strpos($urls['manifest'], '?') === false ? '?' : '&') . 't=' . time();
         $resp = wp_remote_get($url, ['timeout' => 12, 'headers' => ['Accept' => 'application/json']]);
-        if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
+        if (is_wp_error($resp)) {
+            $failLog[] = $source . ': ' . $resp->get_error_message();
+            continue;
+        }
+        $code = wp_remote_retrieve_response_code($resp);
+        if ($code !== 200) {
+            $failLog[] = $source . ': HTTP ' . $code;
             continue;
         }
         $json = json_decode(wp_remote_retrieve_body($resp), true);
@@ -172,6 +178,7 @@ function yimai_update_remote_meta(?string &$source_used = null): array
             $source_used = $source;
             return $json;
         }
+        $failLog[] = $source . ': 响应不是有效清单 JSON';
     }
     return [];
 }
@@ -208,11 +215,12 @@ function yimai_local_changelog(): array
 function yimai_updater_check(): array
 {
     $local = yimai_theme_meta();
-    $remote = yimai_update_remote_meta($source);
+    $failLog = [];
+    $remote = yimai_update_remote_meta($source, $failLog);
     if (empty($remote)) {
         return [
             'ok' => false,
-            'message' => '无法获取远端版本信息（Gitee / GitHub 均不可达），请稍后重试。',
+            'message' => '无法获取远端版本信息：' . implode('；', $failLog),
             'local' => $local,
             'changelog' => yimai_local_changelog(),
         ];

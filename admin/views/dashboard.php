@@ -55,7 +55,7 @@ if (!$yimaiInWpAdmin): ?><!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>网站内容后台 · 一麦瑜伽</title>
 <?php else: ?>
-<style>/* wp-admin 内隐藏冗余的 WP 通知，腾出空间 */#wpbody-content .notice,#wpbody-content .updated{display:none}</style>
+<style>/* wp-admin 内隐藏冗余的 WP 通知与页脚，腾出空间 */#wpbody-content .notice,#wpbody-content .updated,#wpfooter{display:none}#wpcontent{padding-bottom:120px}</style>
 <?php endif; ?>
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/app.css'); ?>">
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/admin.css'); ?>">
