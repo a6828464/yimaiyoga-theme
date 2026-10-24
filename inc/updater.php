@@ -33,14 +33,16 @@ const YIMAI_UPDATE_GITHUB_REPO = 'a6828464/yimaiyoga-theme';
  */
 function yimai_update_sources(): array
 {
+    // Gitee 优先（国内服务器 GitHub 常不可达；2026-10 阿里云生产站实测 GitHub
+    // 请求挂起导致后台「网络错误」）。codeload 主源语义不变，只是排到兜底位。
     return [
-        'github' => [
-            'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
-            'package' => 'https://codeload.github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/zip/refs/heads/main',
-        ],
         'gitee' => [
             'manifest' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
             'package' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
+        ],
+        'github' => [
+            'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
+            'package' => 'https://codeload.github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/zip/refs/heads/main',
         ],
     ];
 }
@@ -497,18 +499,58 @@ function yimai_updater_run(): array
         }
         WP_Filesystem();
 
-        if (!yimai_is_admin()) {
-            throw new RuntimeException('未登录');
-        }
-
         [$zipfile, $source] = yimai_update_download_package(get_temp_dir() . 'yimai-theme-' . bin2hex(random_bytes(4)) . '.zip');
         $log[] = '更新包下载完成（来源：' . $source . '，' . round(filesize($zipfile) / 1024) . ' KB）';
+        return yimai_updater_apply_zip($zipfile, $source, $log, $start, true);
+    } catch (Throwable $error) {
+        $log[] = '更新失败：' . $error->getMessage();
+        return ['ok' => false, 'message' => $error->getMessage(), 'log' => $log];
+    }
+}
+
+/**
+ * 后台「上传 zip 更新」入口（对齐微光短剧 App 的「本地安装包」模式）：
+ * 服务器外网拉不动 GitHub/Gitee 时，本地 release.sh 打的包直接上传应用。
+ * 与在线更新共用同一套校验/备份/覆盖/迁移管线；唯一区别是包来自上传
+ * 且跳过内容哈希校验（哈希在远端 manifest 里，外网不通时本来也取不到，
+ * 上传者身份 + manage_options/nonce 就是这条通道的信任边界）。
+ */
+function yimai_updater_run_upload(array $file): array
+{
+    $log = [];
+    $start = microtime(true);
+    try {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('请选择更新包（yimaiyoga-theme-latest.zip）');
+        }
+        $tmp = (string) ($file['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new RuntimeException('上传文件无效');
+        }
+        $zipfile = get_temp_dir() . 'yimai-theme-upload-' . bin2hex(random_bytes(4)) . '.zip';
+        if (!@move_uploaded_file($tmp, $zipfile)) {
+            throw new RuntimeException('上传文件落盘失败（检查临时目录权限）');
+        }
+        $log[] = '更新包上传完成（' . round(filesize($zipfile) / 1024) . ' KB）';
+        return yimai_updater_apply_zip($zipfile, '本地上传', $log, $start, false);
+    } catch (Throwable $error) {
+        $log[] = '更新失败：' . $error->getMessage();
+        return ['ok' => false, 'message' => $error->getMessage(), 'log' => $log];
+    }
+}
+
+/** 在线/上传两条更新通道共用的应用管线 */
+function yimai_updater_apply_zip(string $zipfile, string $source, array $log, float $start, bool $checkHash): array
+{
+    try {
         yimai_update_verify_package($zipfile, $log);
 
         $work = get_temp_dir() . 'yimai-theme-extract-' . bin2hex(random_bytes(4));
         $root = yimai_update_extract($zipfile, $work);
-        // 内容哈希校验在解压之后：比对的是文件内容，与 zip 打包方式无关
-        yimai_update_check_hash($root, $log);
+        if ($checkHash) {
+            // 内容哈希校验在解压之后：比对的是文件内容，与 zip 打包方式无关
+            yimai_update_check_hash($root, $log);
+        }
         $remote = json_decode((string) file_get_contents($root . '/theme.json'), true) ?: [];
         $localVersion = (string) yimai_theme_meta()['version'];
         $remoteVersion = (string) ($remote['version'] ?? '');

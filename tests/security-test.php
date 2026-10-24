@@ -238,7 +238,7 @@ section('安全 7b：内容哈希必须与 zip 打包方式无关');
 $updaterSrc = (string) file_get_contents($theme . '/inc/updater.php');
 check('提供内容哈希函数', str_contains($updaterSrc, 'function yimai_update_content_sha256'), true);
 check('不再对 zip 字节做 hash_file', !preg_match('/hash_file\(\s*[\'"]sha256[\'"],\s*\$zipfile/', $updaterSrc), true);
-check('校验调用在解压之后', (bool) preg_match('/\$root = yimai_update_extract\([^;]+;\s*\/\/[^\n]*\n\s*yimai_update_check_hash\(\$root/', $updaterSrc), true);
+check('校验调用在解压之后', (bool) preg_match('/yimai_update_extract\(\$zipfile, \$work\);\s*if \(\$checkHash\) \{\s*\/\/[^\n]*\n\s*yimai_update_check_hash\(\$root/s', $updaterSrc), true);
 check('check_hash 接收解压根目录', str_contains($updaterSrc, 'function yimai_update_check_hash(string $root'), true);
 
 // 发布脚本必须用同一套算法（否则两边哈希不同）

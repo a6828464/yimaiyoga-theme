@@ -150,6 +150,16 @@ switch (true) {
         json_response(yimai_updater_run());
         break;
 
+    case $path === '/admin/update-upload':
+        require_admin();
+        if (request_method() !== 'POST') {
+            json_response(['message' => 'Method Not Allowed'], 405);
+        }
+        verify_csrf();
+        @set_time_limit(300);
+        json_response(yimai_updater_run_upload($_FILES['file'] ?? []));
+        break;
+
     default:
         require_admin();
         render_view('dashboard');

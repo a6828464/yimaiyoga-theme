@@ -104,6 +104,10 @@ add_action('wp_ajax_yimai_admin_api', function (): void {
             @set_time_limit(300);
             json_response(yimai_updater_run());
 
+        case 'update-upload':
+            @set_time_limit(300);
+            json_response(yimai_updater_run_upload($_FILES['file'] ?? []));
+
         default:
             json_response(['message' => '未知操作：' . $op], 400);
     }

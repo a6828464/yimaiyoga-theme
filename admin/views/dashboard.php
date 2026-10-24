@@ -279,7 +279,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
 ?>
 <form data-admin-form method="post" action="<?php echo esc_url($formAction); ?>">
-<textarea name="config_json" data-config-json hidden><?php echo h($json); ?></textarea>
+<textarea name="config_json" data-config-json hidden style="display:none!important"><?php echo h($json); ?></textarea>
 <input type="hidden" name="csrf_token" value="<?php echo esc_attr(csrf_token()); ?>">
 
 <!-- ===================== 基础与SEO ===================== -->
@@ -580,6 +580,11 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
       <button type="button" class="upload-btn" data-update-run style="border-color:var(--clay);color:var(--clay)">立即更新</button>
       <span data-update-status style="font-size:13px;color:var(--clay)"></span>
     </p>
+    <p style="margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input type="file" accept=".zip" data-update-file style="font-size:12px;color:var(--mut)">
+      <button type="button" class="upload-btn" data-update-upload>上传更新包更新</button>
+    </p>
+    <p class="hint" style="margin-top:2px">网络不通时用：本地跑 <code>tools/release.sh</code> 生成的 <code>yimaiyoga-theme-latest.zip</code> 选进来即可，走的是与在线更新同一套校验/备份/覆盖管线（仅跳过远端清单哈希比对）。</p>
     <pre data-update-log style="display:none;margin-top:12px;background:#1d241f;color:#e8e4da;border-radius:10px;padding:14px;font-size:12px;font-family:Consolas,monospace;white-space:pre-wrap;max-height:320px;overflow:auto"></pre>
   </div>
   <div class="card">
@@ -622,6 +627,7 @@ if ($yimaiInWpAdmin) {
         'library'      => $yimaiAjaxBase . '&op=library',
         'update-check' => $yimaiAjaxBase . '&op=update-check',
         'update-run'   => $yimaiAjaxBase . '&op=update-run',
+        'update-upload' => $yimaiAjaxBase . '&op=update-upload',
     ];
     $yimaiCsrf = wp_create_nonce('yimai_admin_api');
 } else {
@@ -632,6 +638,7 @@ if ($yimaiInWpAdmin) {
         'library'      => yimai_admin_path('library'),
         'update-check' => yimai_admin_path('update-check'),
         'update-run'   => yimai_admin_path('update-run'),
+        'update-upload' => yimai_admin_path('update-upload'),
     ];
     $yimaiCsrf = csrf_token();
 }
@@ -745,6 +752,35 @@ window.YIMAI_IMGBED = {
       .catch(function () { elStatus.textContent = '网络错误或超时，请重试'; elLog.textContent += '\n（请求异常中断）'; })
       .finally(function () { btnRun.disabled = false; });
   });
+
+  /* 本地上传 zip 更新（微光短剧式「本地安装包」通道，外网不通时用） */
+  var btnUpload = $('[data-update-upload]'), elFile = $('[data-update-file]');
+  if (btnUpload && elFile) {
+    btnUpload.addEventListener('click', function () {
+      var f = elFile.files && elFile.files[0];
+      if (!f) { elStatus.textContent = '请先选择 yimaiyoga-theme-latest.zip'; return; }
+      if (!confirm('用本地更新包覆盖主题代码？\n（更新前会自动备份，服务器本地配置与图片不受影响）')) return;
+      btnUpload.disabled = true;
+      elStatus.textContent = '正在上传并应用更新包，请勿关闭页面…';
+      elLog.style.display = 'block';
+      elLog.textContent = '更新中…';
+      var fd = new FormData();
+      fd.append('csrf_token', window.CSRF_TOKEN || '');
+      fd.append('file', f);
+      fetch(window.YIMAI_ENDPOINTS['update-upload'], { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          elLog.textContent = (data.log || [data.message || '无输出']).join('\n');
+          elStatus.textContent = data.ok ? '已更新到 v' + (data.version || '') + ' ✓' : (data.message || '更新失败');
+          if (data.ok) {
+            elLocal.textContent = 'v' + (data.version || '') + '（本次更新）';
+            setTimeout(function () { check(true); }, 1200);
+          }
+        })
+        .catch(function () { elStatus.textContent = '网络错误或超时，请重试'; elLog.textContent += '\n（请求异常中断）'; })
+        .finally(function () { btnUpload.disabled = false; });
+    });
+  }
 
   check(true);
 })();
