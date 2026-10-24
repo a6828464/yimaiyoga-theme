@@ -645,8 +645,8 @@ if ($yimaiInWpAdmin) {
 $yimaiJsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 ?>
 <script>
-// 内联 script 上下文：必须用 JSON_HEX_TAG/AMP/APOS/QUOT，
-// 否则 JSON_UNESCAPED_SLASHES 会让 </script> 原样输出并提前闭合脚本标签。
+// 内联 script 上下文：必须用 JSON_HEX_TAG/AMP/APOS/QUOT 转义，
+// 防止 JSON 中的标签字面量提前闭合本脚本（本注释不能写出该标签名本身）。
 window.CSRF_TOKEN = <?php echo wp_json_encode($yimaiCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.CONFIG = <?php echo wp_json_encode($config, $yimaiJsonFlags); ?>;
 window.YIMAI_URI = <?php echo wp_json_encode($theme_uri, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
