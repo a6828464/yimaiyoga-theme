@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.7.1');
+define('YIMAI_VERSION', '1.7.2');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -124,16 +124,26 @@ function yimai_meta_description(): void
 {
     $config = yimai_config();
     $desc = trim((string) ($config['site']['description'] ?? ''));
+    // 文章/页面页：优先输出本页自己的摘要（GSO 生成的 yimai_gso_excerpt →
+    // 手动摘要 → 正文截断），避免全站搜索结果摘要都是同一句品牌简介。
+    if (is_singular()) {
+        $post_id = (int) get_the_ID();
+        $singular_desc = trim((string) get_post_meta($post_id, 'yimai_gso_excerpt', true));
+        if ($singular_desc === '') {
+            $post_obj = get_post($post_id);
+            if ($post_obj) {
+                $singular_desc = trim((string) $post_obj->post_excerpt);
+                if ($singular_desc === '') {
+                    $singular_desc = mb_substr(trim(preg_replace('/\s+/', ' ', wp_strip_all_tags((string) $post_obj->post_content))), 0, 160);
+                }
+            }
+        }
+        if ($singular_desc !== '') {
+            $desc = $singular_desc;
+        }
+    }
     if ($desc !== '') {
         echo "\n<meta name=\"description\" content=\"" . esc_attr($desc) . "\">";
-    }
-    // 关键词：与 description 一起在 wp_head 统一输出（header.php 不再重复输出）
-    $keywords = $config['site']['keywords'] ?? [];
-    if (is_array($keywords)) {
-        $keywords = array_filter(array_map('trim', $keywords), static fn($k) => $k !== '');
-        if ($keywords !== []) {
-            echo "\n<meta name=\"keywords\" content=\"" . esc_attr(implode(',', $keywords)) . "\">";
-        }
     }
     // canonical：核心 rel_canonical() 对非 singular 页面（首页、归档）不输出
     if (!is_singular()) {
@@ -148,40 +158,50 @@ function yimai_meta_description(): void
         }
         echo "\n<link rel=\"canonical\" href=\"" . esc_url($url) . "\">";
     }
-    // Open Graph / Twitter：微信与社交分享需要缩略图与标题
-    $site = $config['site'] ?? [];
-    $title = trim((string) ($site['title'] ?? ''));
-    if (is_singular()) {
-        $title = wp_get_document_title();
-    }
-    $ogImage = '';
-    if (is_singular() && has_post_thumbnail()) {
-        $ogImage = (string) get_the_post_thumbnail_url(null, 'full');
-    }
-    if ($ogImage === '') {
-        $ogImage = yimai_image_url((string) ($config['images']['homeHero'] ?? ''));
-    }
-    if ($title !== '') {
-        echo "\n<meta property=\"og:type\" content=\"" . (is_singular() ? 'article' : 'website') . "\">";
-        echo "\n<meta property=\"og:site_name\" content=\"" . esc_attr((string) ($site['name'] ?? '')) . "\">";
-        echo "\n<meta property=\"og:title\" content=\"" . esc_attr($title) . "\">";
-        if ($desc !== '') {
-            echo "\n<meta property=\"og:description\" content=\"" . esc_attr($desc) . "\">";
+    // Open Graph / Twitter / 文章页 description：由「一麦GSO双擎优化」插件统一输出
+    // （文章级 og:title/og:description 取每篇文章自己的 SEO 摘要，而非全站同一句简介）。
+    // 主题保留：站点 title（上方）、全局 description（上方）、canonical（上方）、
+    // 以及下方插件未配置 GEO 实体时的门店 LocalBusiness Schema 兜底。
+    $gso_active = defined('YIMAI_GSO_VERSION');
+    if (!$gso_active) {
+        $site = $config['site'] ?? [];
+        $title = trim((string) ($site['title'] ?? ''));
+        if (is_singular()) {
+            $title = wp_get_document_title();
         }
-        echo "\n<meta property=\"og:url\" content=\"" . esc_url(is_singular() ? (string) get_permalink() : home_url('/')) . "\">";
-        if ($ogImage !== '') {
-            echo "\n<meta property=\"og:image\" content=\"" . esc_url($ogImage) . "\">";
+        $ogImage = '';
+        if (is_singular() && has_post_thumbnail()) {
+            $ogImage = (string) get_the_post_thumbnail_url(null, 'full');
         }
-        echo "\n<meta name=\"twitter:card\" content=\"summary_large_image\">";
-        echo "\n<meta name=\"twitter:title\" content=\"" . esc_attr($title) . "\">";
-        if ($desc !== '') {
-            echo "\n<meta name=\"twitter:description\" content=\"" . esc_attr($desc) . "\">";
+        if ($ogImage === '') {
+            $ogImage = yimai_image_url((string) ($config['images']['homeHero'] ?? ''));
         }
-        if ($ogImage !== '') {
-            echo "\n<meta name=\"twitter:image\" content=\"" . esc_url($ogImage) . "\">";
+        if ($title !== '') {
+            echo "\n<meta property=\"og:type\" content=\"" . (is_singular() ? 'article' : 'website') . "\">";
+            echo "\n<meta property=\"og:site_name\" content=\"" . esc_attr((string) ($site['name'] ?? '')) . "\">";
+            echo "\n<meta property=\"og:title\" content=\"" . esc_attr($title) . "\">";
+            if ($desc !== '') {
+                echo "\n<meta property=\"og:description\" content=\"" . esc_attr($desc) . "\">";
+            }
+            echo "\n<meta property=\"og:url\" content=\"" . esc_url(is_singular() ? (string) get_permalink() : home_url('/')) . "\">";
+            if ($ogImage !== '') {
+                echo "\n<meta property=\"og:image\" content=\"" . esc_url($ogImage) . "\">";
+            }
+            echo "\n<meta name=\"twitter:card\" content=\"summary_large_image\">";
+            echo "\n<meta name=\"twitter:title\" content=\"" . esc_attr($title) . "\">";
+            if ($desc !== '') {
+                echo "\n<meta name=\"twitter:description\" content=\"" . esc_attr($desc) . "\">";
+            }
+            if ($ogImage !== '') {
+                echo "\n<meta name=\"twitter:image\" content=\"" . esc_url($ogImage) . "\">";
+            }
         }
     }
-    // 结构化数据：本地商家（宁波门店信息来自配置）
+    // 结构化数据：本地商家（宁波门店信息来自配置）。GSO 插件配置 GEO 实体后会输出
+    // 增强版门店 Schema（含 geo/营业时间等），此时主题这份简化版让位，避免重复。
+    if ($gso_active && class_exists('YIMAI_GSO_GEO_Entity') && YIMAI_GSO_GEO_Entity::is_configured()) {
+        return;
+    }
     $studios = is_array($config['studios'] ?? null) ? $config['studios'] : [];
     if ($studios !== [] && (is_front_page() || is_home())) {
         $shops = [];

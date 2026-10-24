@@ -1,5 +1,13 @@
 # 更新日志
 
+## v1.7.2 · 2026-10-24
+SEO 输出职责划分修复（与「一麦GSO双擎优化」插件配合）：
+
+- 修复 OG/Twitter Card 双份输出冲突：主题的 `yimai_meta_description()` 此前在每页硬编码一整套 OG/Twitter 标签，与 GSO 插件的输出并存且内容互相矛盾（文章页 og:description 是全站品牌简介而非文章摘要；首页 og:type 恒为 article）。现改为：检测到 GSO 插件激活（`YIMAI_GSO_VERSION` 已定义）时主题不再输出 OG/Twitter，交由插件统一输出；插件未激活时保留原输出作为兜底
+- 修复 meta description 全站同一句：文章/页面页 description 现优先取本页摘要（`yimai_gso_excerpt` → 手动摘要 → 正文截断 160 字），首页/归档页保留品牌简介
+- 移除 `<meta name="keywords">` 输出（搜索引擎已忽略该标签逾十年）
+- 门店 LocalBusiness Schema 让位：GSO 插件配置 GEO 实体后会输出增强版门店结构化数据，此时主题的简化版 HealthAndBeautyBusiness 不再输出，避免同页重复实体
+
 ## v1.7.1 · 2026-09-21
 - 修复在线更新校验逻辑：v1.7.0 的完整性校验比对的是**下载到的 zip 字节哈希**，而主更新源（GitHub codeload 分支归档）由服务端按需生成，zip 元数据与发布包不同——同一 commit 两边字节不同（实测 529bee34… vs de8d48ac…），会导致「立即更新」**必然校验失败**。现改为「解压后的内容哈希」（按相对路径 + 文件内容聚合，与压缩实现、时间戳、条目顺序无关），两个来源校验结果一致
 - 发布脚本同步改用同一算法生成清单哈希
