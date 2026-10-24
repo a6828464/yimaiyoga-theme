@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.8.2 · 2026-10-24
+- 彻底修复 WP 后台「一麦官网」页面底部/段落间泄出大段文本：v1.8.1 只压住了隐藏的 config_json textarea，真正的另一半原因是 dashboard 视图里的 `<style>` 大段样式表在 wp-admin 的 `<body>` 回调里直接 echo，被浏览器按可见文本渲染。现 wp-admin 模式下改为：渲染输出先经缓冲，把内联 `<style>`/`<script>` 与 `<link rel=stylesheet>` 块全部抠出转投 `admin_head`，正文只留结构化内容
+
 ## v1.8.1 · 2026-10-24
 - 修复 WP 后台「一麦官网」页面底部泄出大段配置 JSON「乱码」：隐藏的 config_json textarea 被 wp-admin 全局样式覆盖 `hidden` 属性，加 `display:none!important` 兜底
 - 修复生产服务器（阿里云国内网络）在线更新「网络错误」：更新源顺序与注释声明对齐为 **Gitee 优先、GitHub 兜底**（原实现 GitHub 在前，请求挂起拖死整个检查）

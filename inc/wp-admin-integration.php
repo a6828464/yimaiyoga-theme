@@ -31,7 +31,7 @@ add_action('admin_menu', function (): void {
         '一麦官网',
         'manage_options',
         YIMAI_ADMIN_MENU_SLUG,
-        'yimai_wpadmin_render',
+        'yimai_wpadmin_render_page',
         // 内联 SVG 图标（莲花/叶形，沿用主题色系）
         'data:image/svg+xml;base64,' . base64_encode(
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><path d="M12 21c-4.5-2.2-7-5.3-7-9.2C5 8 8 5.6 12 3c4 2.6 7 5 7 8.8 0 3.9-2.5 7-7 9.2z" stroke="#a9795f" stroke-width="1.6"/><path d="M12 21c-1.8-3.4-1.8-8 0-12 1.8 4 1.8 8.6 0 12z" fill="#a9795f"/></svg>'
@@ -47,6 +47,46 @@ function yimai_wpadmin_render(): void
         wp_die('权限不足');
     }
     render_view('dashboard');
+}
+
+/**
+ * 视图内的 <style>/<script> 在 wp-admin 必须走 admin_head 输出：
+ * 页面回调在 <body> 里执行，若直接 echo <style>，浏览器会把样式规则文本
+ * 泄成可见正文（2026-10 生产站「底部大段乱码」的另一半原因）。
+ * render_view 前挂缓冲，把 <style>/<script> 块从正文里抠出来转投 admin_head。
+ */
+function yimai_wpadmin_render_page(): void
+{
+    if (!current_user_can('manage_options')) {
+        wp_die('权限不足');
+    }
+    ob_start();
+    render_view('dashboard');
+    $html = (string) ob_get_clean();
+
+    $headBlocks = [];
+    // 内联 <style>/<script>（无 src 的）搬到 admin_head
+    $html = (string) preg_replace_callback(
+        '/<(style|script)\b(?![^>]*\bsrc=)[^>]*>.*?<\/\1>/is',
+        function ($m) use (&$headBlocks) {
+            $headBlocks[] = $m[0];
+            return '';
+        }
+        , $html
+    );
+    // <link rel=stylesheet> 同样搬到 head（body 里虽能加载但属非法位置）
+    $html = (string) preg_replace_callback(
+        '/<link\b[^>]*rel=["\']stylesheet["\'][^>]*>/i',
+        function ($m) use (&$headBlocks) {
+            $headBlocks[] = $m[0];
+            return '';
+        }
+        , $html
+    );
+    add_action('admin_head', function () use (&$headBlocks) {
+        echo implode("\n", $headBlocks); // phpcs:ignore -- 主题为自渲染模板
+    }, 1);
+    echo $html; // phpcs:ignore -- 同上
 }
 
 /**
