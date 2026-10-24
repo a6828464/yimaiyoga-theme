@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.8.6 · 2026-10-25
+- 修复「检查更新 / 图片库」永远失败、而「立即更新」却正常：WP 的 `check_ajax_referer` 默认只读 `_ajax_nonce`/`_wpnonce`/QUERY 参数，我们的前端把 nonce 放在自定义 `csrf_token` 字段或 `X-CSRF-TOKEN` 头——POST 类操作因为 FormData 带了 csrf_token 所以能过，纯 header 的 GET 检查类请求被 403 拦死。现校验前把头里的 token 回填进请求参数再验
+
 ## v1.8.5 · 2026-10-25
 - 「检查更新」失败提示现在带具体原因（Gitee/GitHub 各自的错误消息或 HTTP 状态码），不再只有一句「网络错误」，便于定位是 DNS、超时还是状态码问题
 - 隐藏 WP 后台页脚「感谢使用 WordPress」：此前它穿透内容后台底部保存栏，在左下角形成缺口并遮挡重叠

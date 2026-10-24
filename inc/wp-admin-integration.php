@@ -57,6 +57,14 @@ add_action('wp_ajax_yimai_admin_api', function (): void {
     if (!current_user_can('manage_options')) {
         json_response(['message' => '权限不足'], 403);
     }
+    // check_ajax_referer 默认只读 _ajax_nonce/_wpnonce/QUERY 参数；
+    // 我们的前端走自定义 csrf_token 字段或 X-CSRF-TOKEN 头，先回填再校验。
+    if (empty($_REQUEST['csrf_token'])) {
+        $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (is_string($headerToken) && $headerToken !== '') {
+            $_REQUEST['csrf_token'] = $headerToken;
+        }
+    }
     check_ajax_referer(YIMAI_ADMIN_NONCE_ACTION, 'csrf_token');
 
     $op = (string) ($_REQUEST['op'] ?? '');
