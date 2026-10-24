@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.7.3');
+define('YIMAI_VERSION', '1.8.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -532,3 +532,9 @@ function yimai_admin_route(): void
 }
 add_action('template_redirect', 'yimai_admin_route', 1);
 add_action('init', 'yimai_admin_route', 1);
+
+/* -------------------------------------------------------------------------
+ * WP 后台集成：内容后台同时挂到 /wp-admin → 「一麦官网」菜单
+ * （admin-ajax 接口用 manage_options + nonce；独立 /admin 入口保留作兜底）
+ * ---------------------------------------------------------------------- */
+require YIMAI_THEME_DIR . '/inc/wp-admin-integration.php';

@@ -1,5 +1,8 @@
 <?php
 /** @var array $config */
+/* 是否在 WP 后台（wp-admin）内渲染：wp-admin 已提供 HTML 骨架与登录态，
+ * 视图此时只输出自身内容；独立 /admin 入口下则输出完整 HTML 文档。 */
+$yimaiInWpAdmin = function_exists('get_current_screen') && get_current_screen() !== null;
 $json = wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 $theme_uri = get_template_directory_uri();
 $copySections = ['home' => '首页', 'classes' => '课程', 'instructors' => '师资', 'membership' => '会员', 'booking' => '预约', 'studio' => '空间', 'contact' => '联系', 'training' => '教培'];
@@ -45,12 +48,15 @@ $navGroups = [
         'security' => '账号安全',
     ],
 ];
-?><!DOCTYPE html>
+if (!$yimaiInWpAdmin): ?><!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>网站内容后台 · 一麦瑜伽</title>
+<?php else: ?>
+<style>/* wp-admin 内隐藏冗余的 WP 通知，腾出空间 */#wpbody-content .notice,#wpbody-content .updated{display:none}</style>
+<?php endif; ?>
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/app.css'); ?>">
 <link rel="stylesheet" href="<?php echo esc_url($theme_uri . '/assets/css/admin.css'); ?>">
 <style>
@@ -221,8 +227,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   .savebar .msg{font-size:12px}
 }
 </style>
-</head>
-<body<?php echo $adminTheme !== '' ? ' data-admin-theme="' . esc_attr($adminTheme) . '"' : ''; ?>>
+<?php if (!$yimaiInWpAdmin): ?></head>
+<body<?php echo $adminTheme !== '' ? ' data-admin-theme="' . esc_attr($adminTheme) . '"' : ''; ?>><?php endif; ?>
 <script>(function(){try{var t=localStorage.getItem('yimai_admin_theme');if(t){document.body.setAttribute('data-admin-theme',t)}}catch(e){}})();</script>
 
 <div class="mobile-top">
@@ -246,13 +252,18 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     <?php foreach ($navGroups as $group => $items): ?>
       <div class="side-group"><?php echo h($group); ?></div>
       <?php foreach ($items as $panel => $title): ?>
+        <?php if ($yimaiInWpAdmin && $panel === 'security') continue; // wp-admin 登录态下无独立后台密码 ?>
         <button type="button" data-tab="<?php echo h($panel); ?>" data-title="<?php echo h($title); ?>" class="<?php echo $panel === 'site' ? 'active' : ''; ?>"><?php echo h($title); ?><?php if ($panel === 'update'): ?><em class="side-dot" data-update-dot hidden></em><?php endif; ?></button>
       <?php endforeach; ?>
     <?php endforeach; ?>
   </nav>
   <div class="side-foot">
     <a href="/" target="_blank">查看网站 ↗</a>
+    <?php if ($yimaiInWpAdmin): ?>
+    <a href="<?php echo esc_url(wp_logout_url(admin_url())); ?>">退出登录</a>
+    <?php else: ?>
     <a href="<?php echo esc_url(yimai_admin_path('logout')); ?>">退出登录</a>
+    <?php endif; ?>
   </div>
 </aside>
 
@@ -263,7 +274,11 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
 </header>
 
 <main class="container">
-<form data-admin-form method="post" action="<?php echo esc_url(yimai_admin_path('save')); ?>">
+<?php
+// wp-admin 内表单不直接提交（由 admin.js 的 fetch 走 ajax 保存）；独立入口保留原 action 兜底。
+$formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
+?>
+<form data-admin-form method="post" action="<?php echo esc_url($formAction); ?>">
 <textarea name="config_json" data-config-json hidden><?php echo h($json); ?></textarea>
 <input type="hidden" name="csrf_token" value="<?php echo esc_attr(csrf_token()); ?>">
 
@@ -530,6 +545,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
 </section>
 
+<?php if (!$yimaiInWpAdmin): ?>
 <!-- ===================== 账号安全 ===================== -->
 <section class="panel" data-panel="security">
   <div class="card">
@@ -541,6 +557,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
     <p style="margin-top:12px"><button type="button" class="btn secondary" data-change-password style="border:1px solid var(--line);border-radius:999px;padding:10px 26px;cursor:pointer">修改密码</button> <span data-password-msg style="font-size:13px;color:var(--clay)"></span></p>
   </div>
 </section>
+<?php endif; ?>
 
 <!-- ===================== 在线更新 ===================== -->
 <section class="panel" data-panel="update">
@@ -593,14 +610,42 @@ input:focus,textarea:focus,select:focus{border-color:var(--clay)}
   </div>
 </div>
 
+<?php
+// 端点注入：wp-admin 内统一走 admin-ajax.php（action=yimai_admin_api&op=<op>），
+// 独立 /admin 入口下走旧路径（yimai_admin_path('<op>')）。
+if ($yimaiInWpAdmin) {
+    $yimaiAjaxBase = admin_url('admin-ajax.php?action=yimai_admin_api');
+    $yimaiEndpoints = [
+        'save'         => $yimaiAjaxBase . '&op=save',
+        'upload'       => $yimaiAjaxBase . '&op=upload',
+        'imgbed-sync'  => $yimaiAjaxBase . '&op=imgbed-sync',
+        'library'      => $yimaiAjaxBase . '&op=library',
+        'update-check' => $yimaiAjaxBase . '&op=update-check',
+        'update-run'   => $yimaiAjaxBase . '&op=update-run',
+    ];
+    $yimaiCsrf = wp_create_nonce('yimai_admin_api');
+} else {
+    $yimaiEndpoints = [
+        'save'         => yimai_admin_path('save'),
+        'upload'       => yimai_admin_path('upload'),
+        'imgbed-sync'  => yimai_admin_path('imgbed-sync'),
+        'library'      => yimai_admin_path('library'),
+        'update-check' => yimai_admin_path('update-check'),
+        'update-run'   => yimai_admin_path('update-run'),
+    ];
+    $yimaiCsrf = csrf_token();
+}
+$yimaiJsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+?>
 <script>
 // 内联 script 上下文：必须用 JSON_HEX_TAG/AMP/APOS/QUOT，
 // 否则 JSON_UNESCAPED_SLASHES 会让 </script> 原样输出并提前闭合脚本标签。
-window.CSRF_TOKEN = <?php echo wp_json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-window.CONFIG = <?php echo wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.CSRF_TOKEN = <?php echo wp_json_encode($yimaiCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.CONFIG = <?php echo wp_json_encode($config, $yimaiJsonFlags); ?>;
 window.YIMAI_URI = <?php echo wp_json_encode($theme_uri, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 // 后台路径前缀由 PHP 推导（支持 WP 装在子目录），JS 侧不再硬编码 /admin
 window.YIMAI_ADMIN_BASE = <?php echo wp_json_encode(yimai_admin_path(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.YIMAI_ENDPOINTS = <?php echo wp_json_encode($yimaiEndpoints, $yimaiJsonFlags); ?>;
 window.YIMAI_IMGBED = {
   domain: <?php echo wp_json_encode($imgbedDomain, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
   map: <?php echo wp_json_encode($imgbedMap, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
@@ -669,7 +714,7 @@ window.YIMAI_IMGBED = {
   }
   function check(silent) {
     if (!silent) { btnCheck.disabled = true; elStatus.textContent = '正在检查…'; }
-    return fetch(window.YIMAI_ADMIN_BASE+'/update-check', { headers: { 'X-CSRF-TOKEN': window.CSRF_TOKEN || '' } })
+    return fetch(window.YIMAI_ENDPOINTS['update-check'], { headers: { 'X-CSRF-TOKEN': window.CSRF_TOKEN || '' } })
       .then(function (r) { return r.json(); })
       .then(function (data) { applyCheck(data); })
       .catch(function () { if (!silent) elStatus.textContent = '网络错误，请重试'; })
@@ -686,7 +731,7 @@ window.YIMAI_IMGBED = {
     elLog.textContent = '更新中…';
     var fd = new FormData();
     fd.append('csrf_token', window.CSRF_TOKEN || '');
-    fetch(window.YIMAI_ADMIN_BASE+'/update-run', { method: 'POST', body: fd })
+    fetch(window.YIMAI_ENDPOINTS['update-run'], { method: 'POST', body: fd })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         elLog.style.display = 'block';
@@ -704,5 +749,5 @@ window.YIMAI_IMGBED = {
   check(true);
 })();
 </script>
-</body>
-</html>
+<?php if (!$yimaiInWpAdmin): ?></body>
+</html><?php endif; ?>
