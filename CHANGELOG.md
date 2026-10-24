@@ -1,5 +1,8 @@
 # 更新日志
 
+## v1.8.3 · 2026-10-24
+- 紧急回滚 v1.8.2 的「样式转投 admin_head」方案：admin_head 钩子在菜单页回调**之前**就已执行完毕，回调里注册的输出永远不会触发，导致后台页 CSS 全部丢失（页面变成无样式裸 HTML）。恢复为回调直接渲染视图；v1.8.1 对 config_json textarea 的 `display:none!important` 修复保留，已足够消除此前底部泄出的配置文本
+
 ## v1.8.2 · 2026-10-24
 - 彻底修复 WP 后台「一麦官网」页面底部/段落间泄出大段文本：v1.8.1 只压住了隐藏的 config_json textarea，真正的另一半原因是 dashboard 视图里的 `<style>` 大段样式表在 wp-admin 的 `<body>` 回调里直接 echo，被浏览器按可见文本渲染。现 wp-admin 模式下改为：渲染输出先经缓冲，把内联 `<style>`/`<script>` 与 `<link rel=stylesheet>` 块全部抠出转投 `admin_head`，正文只留结构化内容
 
