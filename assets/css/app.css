@@ -63,6 +63,28 @@
 .post-cover img{width:100%;aspect-ratio:16/9;object-fit:cover}
 .post-back{margin-top:3rem}
 
+/* 评论区（single.php comments_template） */
+.post-comments{max-width:860px;margin:0 auto;padding:0 1.25rem 5rem;text-align:left}
+.post-comments .comments-title{font-family:Georgia,serif;color:var(--color-forest);font-size:1.6rem;margin:0 0 1.5rem}
+.post-comments .comment-list{list-style:none;margin:0 0 2.5rem;padding:0}
+.post-comments .comment{border-top:1px solid rgb(var(--color-forest-rgb)/.1);padding:1.4rem 0}
+.post-comments .comment-author{font-weight:600;color:var(--color-forest)}
+.post-comments .comment-metadata{font-size:.76rem;color:var(--color-smoke)}
+.post-comments .comment-metadata a{color:inherit}
+.post-comments .comment-content{line-height:2;color:rgb(var(--color-ink-rgb)/.72)}
+.post-comments .comment-content a{color:var(--color-clay);text-decoration:underline}
+.post-comments .reply a{font-size:.76rem;letter-spacing:.14em;color:var(--color-clay)}
+.post-comments .children{list-style:none;padding-left:1.5rem}
+.post-comments .comment-respond{margin-top:1rem}
+.post-comments .comment-reply-title{font-family:Georgia,serif;color:var(--color-forest);font-size:1.3rem}
+.post-comments .comment-form label{display:block;font-size:.78rem;letter-spacing:.12em;color:var(--color-smoke);margin-bottom:.3rem}
+.post-comments .comment-form input[type="text"],.post-comments .comment-form input[type="email"],.post-comments .comment-form input[type="url"],.post-comments .comment-form textarea{width:100%;border:0;border-bottom:1px solid rgb(var(--color-forest-rgb)/.16);background:transparent;padding:.8rem .2rem;outline:none;font:inherit;color:var(--color-ink)}
+.post-comments .comment-form textarea{min-height:8rem;resize:vertical}
+.post-comments .comment-form .submit{border:1px solid var(--color-forest);border-radius:999px;background:var(--color-forest);color:var(--color-pearl);padding:.85rem 1.8rem;font-size:.76rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+.post-comments .comment-form .submit:hover{background:transparent;color:var(--color-forest)}
+.post-comments .logged-in-as,.post-comments .comment-notes{font-size:.82rem;color:rgb(var(--color-ink-rgb)/.55)}
+.post-comments .logged-in-as a,.post-comments .comment-notes a{color:var(--color-clay)}
+
 /* 分页（page-blog.php paginate_links，type=list 输出 ul.pagination） */
 .pagination{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;padding:2.5rem 0 1rem;margin:0;list-style:none}
 .pagination .page-numbers{display:inline-flex;align-items:center;justify-content:center;min-width:2.4rem;height:2.4rem;padding:0 .7rem;border:1px solid rgb(var(--color-forest-rgb)/.16);border-radius:999px;font-size:.8rem;letter-spacing:.06em;color:rgb(var(--color-ink-rgb)/.7)}

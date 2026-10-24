@@ -38,6 +38,17 @@ while (have_posts()):
         <a class="text-link" href="<?php echo esc_url(home_url('/blog')); ?>">← 返回博客</a>
       </p>
     </section>
+
+    <?php
+    // 文章评论区：开启评论或已有评论时渲染 WP 原生评论模板（comments.php 缺省时使用核心默认输出）
+    if (comments_open() || get_comments_number()):
+        ?>
+        <section class="page-block post-comments">
+          <?php comments_template(); ?>
+        </section>
+        <?php
+    endif;
+    ?>
     <?php
 endwhile;
 
