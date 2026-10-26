@@ -562,7 +562,7 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
 <!-- ===================== 在线更新 ===================== -->
 <section class="panel" data-panel="update">
   <div class="card">
-    <h3>主题在线更新 <span style="font-weight:400;font-size:12px;color:var(--mut)">（GitHub + Gitee 双平台）</span></h3>
+    <h3>主题在线更新 <span style="font-weight:400;font-size:12px;color:var(--mut)">（Gitee 主源 + GitHub 直连 + GitHub 反代兜底）</span></h3>
     <p class="hint">本地迭代代码 → 提交并 git push 推送双平台 → 在此点击「检查更新 / 立即更新」。更新只覆盖代码文件，保留服务器本地的配置、上传图片与密钥文件；密钥与备份不会被更新包覆盖。更新前自动备份到 <code>wp-content/yimai-backups</code>（保留最近 2 份，不含密钥）。</p>
     <?php $updateState = function_exists('yimai_update_state') ? yimai_update_state() : []; ?>
     <?php if (!empty($updateState['version'])): ?>
@@ -712,8 +712,12 @@ window.YIMAI_IMGBED = {
       if (elDot) elDot.hidden = true;
       return;
     }
-    elRemote.innerHTML = renderMeta(data.remote) + (data.source ? ' <span style="font-size:12px;color:var(--mut)">via ' + esc(data.source) + '</span>' : '');
-    elStatus.textContent = data.up_to_date ? '已是最新版本 ✓' : '发现新版本，可点击「立即更新」';
+    var srcMap = { gitee: '经 Gitee', github: '经 GitHub', github_mirror: '经 GitHub 反代', '本地上传': '本地上传' };
+    var viaHtml = data.source ? ' <span style="font-size:12px;color:var(--mut)">' + esc(srcMap[data.source] || data.source) + (data.stale ? '（缓存）' : '') + '</span>' : '';
+    elRemote.innerHTML = renderMeta(data.remote) + viaHtml;
+    elStatus.textContent = data.stale
+      ? '远端暂时不可达，以上为上次成功检查的缓存结果'
+      : (data.up_to_date ? '已是最新版本 ✓' : '发现新版本，可点击「立即更新」');
     if (elDot) elDot.hidden = !!data.up_to_date;
     var entries = (data.remote && data.remote.changelog && data.remote.changelog.length)
       ? data.remote.changelog : (data.changelog || []);

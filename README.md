@@ -32,25 +32,48 @@ php wp-content/themes/yimaiyoga/cli/set-admin-password.php
 - 升级自旧版（v1.6.x 及更早）且从未改过密码的站点，升级时会**自动作废**旧版可推算口令并要求重设
 - 登录失败限流：15 分钟内 5 次失败锁定 15 分钟；会话 30 分钟无操作失效
 
-## 在线更新（双平台推送）
+## 在线更新（三通道 · 对齐一麦GOS 参考手册）
 
-对齐「一麦工作台」的发布模式：本地迭代 → 推送双平台 → 线上后台一键更新。
+本地迭代 → 推送双平台 → 线上后台一键更新。镜像推送与多通道更新方法论沉淀自
+《GitHub镜像推送与国内服务器在线更新-参考手册》（一麦GSO 插件 2026-10 排障产物）。
 
 ```
 本地修改代码 → 提交并 git push   # 推送主仓库 Gitee（国内直连，稳定）
         ↓
-tools/release.sh                 # 校验工作区干净 + 版本一致 → 补推 GitHub 镜像 → 刷新双平台 Release
+tools/release.sh                 # 校验工作区干净 + 版本一致 → 经反代补推 GitHub → 刷新双平台 Release → 三通道匿名校验
         ↓
 后台 /admin → 在线更新 → 检查更新 → 立即更新
 ```
 
+### 镜像推送（本机 → GitHub）
+
+- 本机推 GitHub 走自建反代：`git -c http.proxy= push https://github.shunan.fun/a6828464/yimaiyoga-theme.git main:main`
+  （`-c http.proxy=` 置空本次会话代理，绕开全局坏代理 + `insteadOf` 重写叠加；Cloudflare 反代会间歇抖动，
+  framing layer / SSL / Empty reply 类错误按「等 20 秒重试 → HTTP/1.1 → postBuffer 加大」三档节奏处理）
+- remote `github` 的 fetch 指向反代、push 指向 github.com；release.sh 补推显式走反代 URL，不依赖 remote 配置
+
+### 更新通道（服务器 ← 远端）
+
+三条通道**全部使用 Release 静态资产**（同一份 zip 与 manifest），按序尝试：
+
+| 优先级 | 通道 | manifest / package 来源 |
+|---|---|---|
+| 1 | `gitee`（主源） | Gitee Release 资产（国内服务器秒级） |
+| 2 | `github` | GitHub Release 资产（海外/网络好时） |
+| 3 | `github_mirror` | 反代 `github.shunan.fun` 的 Release 资产（GitHub 被墙但 Cloudflare 可达时救场） |
+
+- **通道记忆**：上次成功通道提升到最前（transient 1 天），检查与下载同源
+- **检查缓存**：成功结果缓存 1 小时；全通道失败时回放上次成功检查（界面标「缓存」）
+- **时间戳破缓存**：请求 URL 一律带 `?t=time()`，规避 Release 同名资产的 CDN 旧包
+- **逐通道错误透出**：失败提示形如「gitee: HTTP 502；github: cURL error 28；github_mirror: …」
+- codeload 分支归档已退役（v1.9.0）：实时归档字节不固定、无法预发布哈希；静态资产的内容哈希跨通道可比对
+
+### 发布与校验
+
 - 主仓库（source of truth）：Gitee `meng-taoo/yimaiyoga-theme`——origin 的 fetch/push 都指向它
-- 发布镜像：GitHub `a6828464/yimaiyoga-theme`（remote 名 `github`）——release.sh 发布时自动补推并校验
+- 发布镜像：GitHub `a6828464/yimaiyoga-theme`（remote 名 `github`）——release.sh 经反代自动补推并校验
 - 发布前置校验（任一不满足即拒绝发布）：工作区无未提交改动、`theme.json`/`style.css`/`functions.php`/`CHANGELOG.md` 四处版本一致
-- 打包用 `git archive HEAD`：保证发布物 == 已推送 commit，且中文文件名带 UTF-8 标志（与 codeload 归档一致）
-- 拉取优先级是两条独立链：
-  - **清单 manifest**：GitHub Release 资产 → Gitee Release 资产
-  - **更新包 package**：GitHub codeload 分支归档 → Gitee Release 资产（codeload 内容实时生成，规避 Release 同名资产的 CDN 旧包问题）
+- 打包用 `git archive HEAD`：保证发布物 == 已推送 commit，且中文文件名带 UTF-8 标志
 - 服务器端更新实现：`inc/updater.php`，纯 PHP（服务器未装 zip 扩展，走 WordPress 内置 PclZip）
 - 更新行为：只覆盖包内文件；**不删除**服务器本地文件，且 `inc/local-secrets.php`、
   `assets/images/uploads/`、`.backups` 等受保护文件**不会被更新包覆盖**
@@ -92,7 +115,7 @@ tools/release.sh                 # 校验工作区干净 + 版本一致 → 补�
 
 ```bash
 php tests/config-merge-test.php   # 配置合并语义与类型校验（33 项）
-php tests/security-test.php       # 安全加固边界（44 项）
+php tests/security-test.php       # 安全加固边界（75 项，含多通道更新契约）
 ```
 
 改动 `inc/site-data.php`、`admin/inc/bootstrap.php`、`inc/updater.php`、`inc/imgbed.php` 后请运行。

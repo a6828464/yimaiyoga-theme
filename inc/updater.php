@@ -1,13 +1,23 @@
 <?php
 /**
- * 主题在线更新（对齐「一麦工作台」双平台推送模式）
+ * 主题在线更新（对齐「一麦GSO 参考手册」多通道设计）
  *
- * 发布渠道：GitHub + Gitee 双仓库（本地 git push 同时推送两边），
- * 服务器从固定 URL 拉取 main 分支 zip 包，解压覆盖主题目录。
+ * 发布渠道：Gitee（主仓库）+ GitHub（发布镜像，经自建反代 github.shunan.fun 推送），
+ * 三条下载通道全部使用 Release 静态资产（同一份 zip），内容哈希跨通道可比对。
+ *
+ * 通道优先级（国内服务器实测：Gitee 秒级、GitHub 直连挂起、Cloudflare 反代可达）：
+ * 1. gitee         —— Gitee Release 资产（主源，稳定）
+ * 2. github        —— GitHub Release 资产（海外/网络好时走这条）
+ * 3. github_mirror —— 自建反代 Release 资产（GitHub 被墙但 Cloudflare 可达时救场）
+ *
+ * 核心机制（缺一不可）：
+ * - 通道记忆：上次成功的通道提升到最前（transient 1 天），检查与下载同源
+ * - 时间戳破缓存：Release 同名资产重建后 CDN 可能仍吐旧文件
+ * - 逐通道错误透出：失败信息形如「gitee：HTTP 502；github：cURL error 28」
+ * - 检查成功缓存 1 小时；全通道失败时回放上次成功检查（标 stale）
  *
  * 环境约定（2026-09 探测测试服务器得出）：
  * - PHP 8.5，未装 zip 扩展 → 优先 PclZip（WordPress 内置），有 ZipArchive 则用之
- * - Gitee / codeload.github.com 可达，raw.githubusercontent.com 不可靠 → 清单与包均 Gitee 优先
  * - proc_open 不可依赖 → 纯 PHP 实现，不落 shell
  *
  * @package yimaiyoga
@@ -19,32 +29,57 @@ if (!defined('ABSPATH')) {
 
 const YIMAI_UPDATE_GITEE_REPO = 'meng-taoo/yimaiyoga-theme';
 const YIMAI_UPDATE_GITHUB_REPO = 'a6828464/yimaiyoga-theme';
+// GitHub 自建反代域名（Cloudflare 反代 github.com；302 → proxy/release-assets…，
+// 下载请求必须跟随重定向）。2026-10 实测：本机与国内服务器均可达。
+const YIMAI_UPDATE_GITHUB_MIRROR = 'github.shunan.fun';
 
 /**
- * 更新来源。
+ * 更新来源（三条通道，清单与包都指向 Release 静态资产）。
  *
  * 优先级链条（与 README「发布与更新」章节一致）：
- * - 清单 manifest：GitHub Release 资产 → Gitee Release 资产（先到先得）
- * - 更新包 package：GitHub codeload 分支归档 → Gitee Release 资产
+ * - gitee：国内服务器访问稳定、秒级 —— 主源
+ * - github：海外服务器/网络好时走这条
+ * - github_mirror：GitHub 被墙但 Cloudflare 可达时救场（自建反代）
  *
- * 为何包用 codeload 主源：分支归档内容实时生成，绝无 GitHub Release
- * 同名资产被 CDN 缓存吐旧包的问题（2026-09 实测教训，见 CHANGELOG v1.2.3）。
- * 清单两个平台都试，避免单平台不可达时无法检查更新。
+ * v1.9.0 起包不再走 codeload 分支归档：三条通道下载的是同一份静态 zip，
+ * 内容哈希跨通道可比对（codeload 实时归档字节不固定，无法预发布哈希；
+ * 且反代归档需 Origin Rule 放行 codeload，静态资产无需额外放行）。
  */
 function yimai_update_sources(): array
 {
-    // Gitee 优先（国内服务器 GitHub 常不可达；2026-10 阿里云生产站实测 GitHub
-    // 请求挂起导致后台「网络错误」）。codeload 主源语义不变，只是排到兜底位。
+    $gh = 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO;
+    $mirror = 'https://' . YIMAI_UPDATE_GITHUB_MIRROR . '/' . YIMAI_UPDATE_GITHUB_REPO;
     return [
         'gitee' => [
             'manifest' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
             'package' => 'https://gitee.com/' . YIMAI_UPDATE_GITEE_REPO . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
         ],
         'github' => [
-            'manifest' => 'https://github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
-            'package' => 'https://codeload.github.com/' . YIMAI_UPDATE_GITHUB_REPO . '/zip/refs/heads/main',
+            'manifest' => $gh . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
+            'package' => $gh . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
+        ],
+        'github_mirror' => [
+            'manifest' => $mirror . '/releases/download/auto-latest/yimaiyoga-theme-manifest.json',
+            'package' => $mirror . '/releases/download/auto-latest/yimaiyoga-theme-latest.zip',
         ],
     ];
+}
+
+/**
+ * 通道顺序应用「通道记忆」：上次成功的通道提升到最前。
+ *
+ * 手册原则：检查更新与下载包必须同源（否则清单哈希与包可能来自不同发布轮，
+ * 内容哈希必然对不上）。因此清单成功后记住通道，下载时同一通道优先。
+ * gitee 本就是默认首位，记忆 gitee 时无需重排。
+ */
+function yimai_update_sources_ordered(): array
+{
+    $sources = yimai_update_sources();
+    $last = get_transient('yimai_update_manifest_source');
+    if (is_string($last) && $last !== '' && isset($sources[$last]) && $last !== array_key_first($sources)) {
+        $sources = [$last => $sources[$last]] + $sources;
+    }
+    return $sources;
 }
 
 /**
@@ -65,10 +100,9 @@ function yimai_update_expected_sha256(): string
 /**
  * 计算解压目录的**内容哈希**：按「相对路径 + 文件内容哈希」聚合，与 zip 字节无关。
  *
- * 为什么不能用 zip 字节哈希：主更新源是 GitHub codeload 的分支归档，由服务端
- * 按需生成，其 zip 元数据（时间戳/压缩实现/条目顺序）与发布脚本自己打的 release
- * zip 不同——同一个 commit 两边字节不同（实测 529bee34… vs de8d48ac…）。若比对
- * zip 字节哈希，主源会必然校验失败，导致「立即更新」完全不可用。
+ * 为什么不能用 zip 字节哈希：Release 资产经 GitHub/Gitee CDN 分发，不同通道
+ * 理论上可能拿到重传的副本；内容哈希只看解压后的文件内容，任何一份合法
+ * 副本、任何打包实现（git archive / codeload / macOS zip）都得到同一结果。
  *
  * 排除规则必须与 tools/release.sh 的 content_sha256 保持一致。
  */
@@ -157,10 +191,25 @@ function yimai_update_state(): array
     return [];
 }
 
-/** 依次尝试各发布渠道拉取远端 theme.json */
+/**
+ * 更新检查（通道记忆 + 成功缓存 1 小时 + 失败兜底展示）。
+ *
+ * 手册 §3.2-④：成功结果缓存，避免每次进后台都打三通道；
+ * 全通道失败时回放上次成功检查（标 stale），用户至少知道「远端理论上是什么版本」。
+ */
 function yimai_update_remote_meta(?string &$source_used = null, ?array &$failLog = null): array
 {
-    foreach (yimai_update_sources() as $source => $urls) {
+    // 失败兜底：回放上次成功检查的清单（不重试网络），UI 标注「缓存」
+    $fallBack = static function () use (&$source_used): array {
+        $cached = get_transient('yimai_update_manifest_cache');
+        if (is_array($cached) && !empty($cached['json']['version'])) {
+            $source_used = $cached['source'] ?? '';
+            return $cached['json'] + ['_stale' => true];
+        }
+        return [];
+    };
+
+    foreach (yimai_update_sources_ordered() as $source => $urls) {
         // 加时间戳破缓存：GitHub/Gitee 对同名 Release 资产有 CDN 缓存，重建同名 Release 后可能仍吐旧文件
         $url = $urls['manifest'] . (strpos($urls['manifest'], '?') === false ? '?' : '&') . 't=' . time();
         $resp = wp_remote_get($url, ['timeout' => 12, 'headers' => ['Accept' => 'application/json']]);
@@ -176,11 +225,14 @@ function yimai_update_remote_meta(?string &$source_used = null, ?array &$failLog
         $json = json_decode(wp_remote_retrieve_body($resp), true);
         if (is_array($json) && !empty($json['version'])) {
             $source_used = $source;
+            // 通道记忆（1 天）+ 检查结果缓存（1 小时），下载与检查同源
+            set_transient('yimai_update_manifest_source', $source, DAY_IN_SECONDS);
+            set_transient('yimai_update_manifest_cache', ['source' => $source, 'json' => $json], HOUR_IN_SECONDS);
             return $json;
         }
         $failLog[] = $source . ': 响应不是有效清单 JSON';
     }
-    return [];
+    return $fallBack();
 }
 
 /** 解析 CHANGELOG.md 为 [{version,date,notes}]（发布脚本对清单用同一套规则） */
@@ -216,7 +268,10 @@ function yimai_updater_check(): array
 {
     $local = yimai_theme_meta();
     $failLog = [];
+    $source = null;
     $remote = yimai_update_remote_meta($source, $failLog);
+    $stale = (bool) ($remote['_stale'] ?? false);
+    unset($remote['_stale']);
     if (empty($remote)) {
         return [
             'ok' => false,
@@ -230,6 +285,7 @@ function yimai_updater_check(): array
         'local' => $local,
         'remote' => $remote,
         'source' => $source,
+        'stale' => $stale,
         'up_to_date' => version_compare((string) $remote['version'], (string) $local['version'], '<='),
         'changelog' => yimai_local_changelog(),
     ];
@@ -267,6 +323,7 @@ function yimai_update_backup_dir(): string
 /**
  * 下载后的包完整性校验：必须是可读 zip、体积合理、且包含主题必需文件。
  * 这是「不做签名」前提下的最低防线：拒绝明显异常/被截断的包。
+ * 注：三条通道均为静态 Release 资产，内容哈希校验（解压后）恒定适用。
  */
 function yimai_update_verify_package(string $zipfile, array &$log): void
 {
@@ -285,10 +342,15 @@ function yimai_update_verify_package(string $zipfile, array &$log): void
     $log[] = '更新包校验通过（' . round(filesize($zipfile) / 1024) . ' KB）';
 }
 
-/** 下载更新包到临时文件，GitHub 优先、Gitee 兜底，返回 [文件, 来源] */
+/**
+ * 下载更新包到临时文件，按通道顺序（含通道记忆）逐个尝试，返回 [文件, 来源]。
+ *
+ * 三条通道下载的都是同一份静态 Release zip：codeload 实时归档字节不固定、
+ * 无法预发布哈希；静态资产哈希跨通道可比对（见 yimai_update_check_hash）。
+ */
 function yimai_update_download_package(string $dest): array
 {
-    foreach (yimai_update_sources() as $source => $urls) {
+    foreach (yimai_update_sources_ordered() as $source => $urls) {
         // 时间戳破 CDN 缓存（同名 Release 资产重建后 GitHub 边缘节点可能仍吐旧包）
         $url = $urls['package'] . (strpos($urls['package'], '?') === false ? '?' : '&') . 't=' . time();
         $resp = wp_remote_get($url, [
@@ -306,7 +368,7 @@ function yimai_update_download_package(string $dest): array
         file_put_contents($dest, $body);
         return [$dest, $source];
     }
-    throw new RuntimeException('更新包下载失败（Gitee 与 GitHub 均不可达），请检查服务器外网后重试。');
+    throw new RuntimeException('更新包下载失败（Gitee / GitHub / GitHub 反代均不可达），请检查服务器外网后重试，或使用「上传更新包更新」。');
 }
 
 /** 解压 zip（ZipArchive 或 PclZip），返回解压目标目录 */
@@ -327,8 +389,8 @@ function yimai_update_extract(string $zipfile, string $dest): string
             throw new RuntimeException('解压失败：' . $zip->errorInfo(true));
         }
     }
-    // 定位包根（含 theme.json 的目录）：GitHub codeload 包为 <repo>-main 一层目录，
-    // 本地发布脚本打的 zip 包根即主题根（无外层目录）
+    // 定位包根（含 theme.json 的目录）：兼容外层多一层 <repo>-main/ 目录的归档
+    //（历史 codeload 包；当前 Release zip 包根即主题根）
     $root = '';
     if (is_file($dest . '/theme.json')) {
         $root = $dest;

@@ -1,5 +1,14 @@
 # 更新日志
 
+## v1.9.0 · 2026-10-26
+- 在线更新升级为**三通道设计**（对齐《GitHub镜像推送与国内服务器在线更新-参考手册》，沉淀自一麦GSO 插件 2026-10 排障）：Gitee 主源 → GitHub 直连 → **GitHub 反代**（github.shunan.fun，Cloudflare 反代）兜底。国内服务器实测 Gitee 秒级、GitHub 直连挂起、Cloudflare 反代可达，三条通道把「墙」的影响压到最低
+- 更新包来源从 GitHub codeload 分支归档改为 **Release 静态资产**：三条通道下载同一份 zip，内容哈希跨通道可比对（codeload 实时归档字节不固定、无法预发布哈希的历史包袱随之消失）
+- 新增**通道记忆**：上次成功通道提升到最前（transient 保留 1 天），检查更新与下载包同源，避免「清单来自新发布轮、包来自旧发布轮」导致内容哈希必然对不上
+- 新增**检查结果缓存**（1 小时）：三通道全挂时回放上次成功检查的缓存结果并在界面标注「缓存」，用户至少知道远端理论上是什么版本，不再只剩一句无法诊断的「均不可达」
+- 后台更新面板来源标签中文化（经 Gitee / 经 GitHub / 经 GitHub 反代 / 本地上传），排查「为什么慢/为什么失败」时一眼知道走的哪条路
+- `tools/release.sh`：GitHub 补推改走自建反代域名（`git -c http.proxy= push https://github.shunan.fun/…`，绕开全局坏代理与 insteadOf 重写叠加），内置**抖动重试三档**（等 20 秒原样重试 → 降级 HTTP/1.1 → 加大 postBuffer）；发布末尾校验增加反代通道匿名可达性（本机 GitHub 直连失败 ≠ 服务器不可达，用反代 URL 交叉验证）
+- 新增回归测试「安全 9：多通道更新」21 项断言（通道表形状/静态资产/无 codeload、通道记忆重排/去重/未知通道忽略、哈希校验条件、manifest 结构）；`tests/wp-stubs.php` 补 transient 桩
+
 ## v1.8.6 · 2026-10-25
 - 修复「检查更新 / 图片库」永远失败、而「立即更新」却正常：WP 的 `check_ajax_referer` 默认只读 `_ajax_nonce`/`_wpnonce`/QUERY 参数，我们的前端把 nonce 放在自定义 `csrf_token` 字段或 `X-CSRF-TOKEN` 头——POST 类操作因为 FormData 带了 csrf_token 所以能过，纯 header 的 GET 检查类请求被 403 拦死。现校验前把头里的 token 回填进请求参数再验
 

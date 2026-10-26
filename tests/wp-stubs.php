@@ -27,6 +27,29 @@ function delete_option(string $name): bool
     return true;
 }
 
+// ---- transients（通道记忆/检查缓存用；内存实现，测试可重置） ----
+if (!defined('MINUTE_IN_SECONDS')) {
+    define('MINUTE_IN_SECONDS', 60);
+    define('HOUR_IN_SECONDS', 3600);
+    define('DAY_IN_SECONDS', 86400);
+}
+$GLOBALS['__transients'] = [];
+function get_transient($transient)
+{
+    $key = '_transient_' . $transient;
+    return array_key_exists($key, $GLOBALS['__options']) ? $GLOBALS['__options'][$key] : false;
+}
+function set_transient($transient, $value, $expiration = 0): bool
+{
+    $GLOBALS['__options']['_transient_' . $transient] = $value;
+    return true;
+}
+function delete_transient($transient): bool
+{
+    unset($GLOBALS['__options']['_transient_' . $transient]);
+    return true;
+}
+
 // ---- 杂项 ----
 function current_time(string $type = 'mysql', bool $gmt = false)
 {

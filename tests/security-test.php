@@ -288,6 +288,46 @@ check('bootstrap.php 无裸 /admin 跳转', str_contains($boot, "redirect_to('/a
 check('提供了 yimai_admin_path() 推导函数', str_contains($boot, 'function yimai_admin_path'), true);
 
 /* ------------------------------------------------------------------ */
+section('安全 9：多通道更新（对齐 GitHub镜像推送与国内服务器在线更新手册）');
+
+// 9.1 通道表：gitee 主源在前、三条通道、全部静态 Release 资产
+$sources = yimai_update_sources();
+check('通道顺序 gitee 优先', array_key_first($sources), 'gitee');
+check('共三条通道', count($sources), 3);
+check('github 通道在表内', isset($sources['github']), true);
+check('github_mirror 通道在表内', isset($sources['github_mirror']), true);
+foreach ($sources as $name => $urls) {
+    check("通道 {$name} 清单为 Release 静态资产", str_contains($urls['manifest'], '/releases/download/auto-latest/'), true);
+    check("通道 {$name} 包为 Release 静态资产", str_contains($urls['package'], '/releases/download/auto-latest/'), true);
+    check("通道 {$name} 无 codeload 动态归档", str_contains($urls['package'], 'codeload'), false);
+}
+
+// 9.2 通道记忆：上次成功的通道提升到最前（检查与下载同源）
+$GLOBALS['__options'] = [];
+set_transient('yimai_update_manifest_source', 'github_mirror', DAY_IN_SECONDS);
+$ordered = yimai_update_sources_ordered();
+check('记忆通道提升到最前', array_key_first($ordered), 'github_mirror');
+check('记忆重排不丢通道', count($ordered), 3);
+
+// gitee 本就是首位，记忆 gitee 不产生重复项
+set_transient('yimai_update_manifest_source', 'gitee', DAY_IN_SECONDS);
+$ordered2 = yimai_update_sources_ordered();
+check('记忆 gitee 不重复', count(array_keys($ordered2, $ordered2['gitee'], true)), 1);
+
+// 未知/过期通道记忆被忽略
+set_transient('yimai_update_manifest_source', 'ghost', DAY_IN_SECONDS);
+check('未知通道记忆被忽略', array_key_first(yimai_update_sources_ordered()), 'gitee');
+
+// 9.3 哈希校验条件（手册 §3.3）：三条通道均为静态资产，哈希校验恒定适用
+check('在线更新启用哈希校验', str_contains($updaterSrc, '$checkHash) {'), true);
+check('上传通道跳过哈希校验', str_contains($updaterSrc, "yimai_updater_apply_zip(\$zipfile, '本地上传', \$log, \$start, false)"), true);
+
+// 9.4 manifest 结构：version/updated/notes/sha256（发布脚本生成，服务器消费）
+$themeJson = json_decode((string) file_get_contents($theme . '/theme.json'), true);
+check('theme.json 含 version', isset($themeJson['version']), true);
+check('theme.json 含 sha256 字段占位（发布脚本写入）', !isset($themeJson['sha256']) || is_string($themeJson['sha256']), true);
+
+/* ------------------------------------------------------------------ */
 echo "\n" . str_repeat('─', 60) . "\n";
 printf("通过 %d，失败 %d\n", $pass, $fail);
 if ($fail > 0) {
