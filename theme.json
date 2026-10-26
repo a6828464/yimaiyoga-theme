@@ -1,6 +1,6 @@
 {
     "name": "yimaiyoga",
-    "version": "1.9.0",
+    "version": "1.9.1",
     "updated": "2026-10-26",
     "notes": [
         "在线更新改为三通道设计（对齐一麦GOS手册）：Gitee 主源 → GitHub 直连 → GitHub 反代（github.shunan.fun）兜底，清单与包全部使用 Release 静态资产，codeload 动态归档退役",

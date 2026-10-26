@@ -1,0 +1,325 @@
+/*
+ * 一麦瑜伽官网 · 文章正文排版样式
+ * 作用域：.post-content（single.php 正文容器 / 页面正文）
+ *
+ * 设计参考：
+ *  - github-markdown-css（表格边框 + 斑马纹、代码块、引用块的处理方式）
+ *  - typo.css（中文字体栈与行高取舍）
+ *  - Tailwind Typography prose 的间距节奏
+ * 配色全部取自主题 :root 变量（黑檀 forest / 亚麻 linen / 陶土 clay），不引入新色板。
+ *
+ * 仅在单篇/页面加载，避免影响首页、卡片网格等其他 .page-block 区块。
+ */
+
+/* ── 基础排版 ── */
+.post-content {
+  font-size: 17px;
+  line-height: 1.95;
+  color: rgb(var(--color-ink-rgb) / .8);
+  letter-spacing: .012em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.post-content > *:first-child { margin-top: 0; }
+.post-content > *:last-child { margin-bottom: 0; }
+
+/* 首段（导语）：略大、色深，像杂志开篇 */
+.post-content > p:first-of-type {
+  font-size: 1.07rem;
+  line-height: 1.9;
+  color: rgb(var(--color-ink-rgb) / .88);
+}
+
+/* ── 标题层级 ── */
+.post-content h1,
+.post-content h2,
+.post-content h3,
+.post-content h4 {
+  font-family: Georgia, "Songti SC", "Noto Serif SC", serif;
+  color: var(--color-forest);
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.post-content h1 {
+  font-size: 2.1rem;
+  margin: 3.2rem 0 1.4rem;
+  letter-spacing: -.01em;
+}
+
+/* h2：左侧陶土竖线，作为章节分隔的视觉锚点 */
+.post-content h2 {
+  font-size: 1.72rem;
+  margin: 3rem 0 1.2rem;
+  padding-left: .85rem;
+  border-left: 3px solid var(--color-clay);
+  letter-spacing: -.005em;
+}
+
+.post-content h3 {
+  font-size: 1.28rem;
+  margin: 2.2rem 0 .85rem;
+  color: rgb(var(--color-forest-rgb) / .92);
+}
+
+.post-content h4 {
+  font-size: 1.06rem;
+  margin: 1.7rem 0 .6rem;
+  letter-spacing: .02em;
+  color: rgb(var(--color-forest-rgb) / .82);
+}
+
+/* ── 段落与行内元素 ── */
+.post-content p {
+  margin: 0 0 1.25rem;
+}
+
+.post-content strong,
+.post-content b {
+  color: var(--color-forest);
+  font-weight: 600;
+}
+
+.post-content em,
+.post-content i {
+  font-style: italic;
+  color: rgb(var(--color-ink-rgb) / .72);
+}
+
+.post-content mark {
+  background: rgb(var(--color-rose-rgb) / .34);
+  color: var(--color-ink);
+  padding: .1em .25em;
+  border-radius: 3px;
+}
+
+.post-content a {
+  color: #8a5a42;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: .22em;
+  transition: color .2s ease;
+}
+
+.post-content a:hover {
+  color: var(--color-forest);
+}
+
+/* ── 列表 ── */
+.post-content ul,
+.post-content ol {
+  margin: 0 0 1.35rem;
+  padding-left: 1.45rem;
+}
+
+.post-content li {
+  margin: .45rem 0;
+  line-height: 1.9;
+}
+
+.post-content li > ul,
+.post-content li > ol {
+  margin: .4rem 0 .2rem;
+}
+
+.post-content ul ul { list-style-type: circle; }
+.post-content ul ul ul { list-style-type: square; }
+.post-content ol ol { list-style-type: lower-alpha; }
+
+.post-content ul li::marker {
+  color: var(--color-clay);
+}
+
+/* ── 引用 ── */
+.post-content blockquote {
+  margin: 1.8rem 0;
+  padding: 1rem 1.3rem;
+  border-left: 3px solid var(--color-clay);
+  border-radius: 0 6px 6px 0;
+  background: rgb(var(--color-clay-rgb) / .055);
+  color: rgb(var(--color-ink-rgb) / .68);
+  font-style: normal;
+}
+
+.post-content blockquote p:last-child { margin-bottom: 0; }
+.post-content blockquote cite {
+  display: block;
+  margin-top: .6rem;
+  font-size: .82rem;
+  color: var(--color-smoke);
+  font-style: normal;
+}
+
+/* ── 表格（重点：无样式主题下的兜底） ── */
+.post-content table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  margin: 1.9rem 0;
+  font-size: .94rem;
+  line-height: 1.7;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.post-content thead,
+.post-content tbody {
+  width: 100%;
+}
+
+.post-content th,
+.post-content td {
+  border: 1px solid rgb(var(--color-forest-rgb) / .14);
+  padding: .75rem .95rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.post-content th {
+  background: rgb(var(--color-forest-rgb) / .055);
+  color: var(--color-forest);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.post-content tbody tr:nth-child(even) {
+  background: rgb(var(--color-forest-rgb) / .022);
+}
+
+.post-content tbody tr:hover {
+  background: rgb(var(--color-clay-rgb) / .06);
+}
+
+.post-content table caption {
+  caption-side: bottom;
+  padding-top: .6rem;
+  font-size: .82rem;
+  color: var(--color-smoke);
+  text-align: left;
+}
+
+/* ── 代码 ── */
+.post-content code,
+.post-content kbd,
+.post-content samp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .88em;
+  background: rgb(var(--color-forest-rgb) / .06);
+  color: #8a5a42;
+  padding: .16em .42em;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.post-content pre {
+  margin: 1.8rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--color-forest);
+  color: #ece9e1;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: .86rem;
+  line-height: 1.7;
+  -webkit-overflow-scrolling: touch;
+}
+
+.post-content pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  word-break: normal;
+}
+
+/* ── 图片与图注 ── */
+.post-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  margin: 1.8rem 0;
+  box-shadow: 0 14px 34px rgb(var(--color-forest-rgb) / .08);
+}
+
+.post-content figure {
+  margin: 1.8rem 0;
+}
+
+.post-content figure img {
+  margin: 0;
+}
+
+.post-content figcaption {
+  margin-top: .6rem;
+  font-size: .82rem;
+  color: var(--color-smoke);
+  text-align: center;
+}
+
+/* ── 分隔线 ── */
+.post-content hr {
+  border: 0;
+  height: 1px;
+  margin: 2.8rem 0;
+  background: linear-gradient(90deg, transparent, rgb(var(--color-forest-rgb) / .18) 20%, rgb(var(--color-forest-rgb) / .18) 80%, transparent);
+}
+
+/* ── 返回博客链接（原有结构保持一致，仅微调间距） ── */
+.post-content .post-back {
+  margin-top: 3rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid rgb(var(--color-forest-rgb) / .1);
+}
+
+/* ── 响应式 ── */
+@media (max-width: 700px) {
+  .post-content {
+    font-size: 16px;
+    line-height: 1.9;
+  }
+
+  .post-content > p:first-of-type {
+    font-size: 1rem;
+  }
+
+  .post-content h1 { font-size: 1.72rem; margin-top: 2.4rem; }
+  .post-content h2 { font-size: 1.42rem; margin: 2.4rem 0 1rem; }
+  .post-content h3 { font-size: 1.17rem; margin: 1.8rem 0 .7rem; }
+
+  .post-content th,
+  .post-content td {
+    padding: .6rem .7rem;
+    font-size: .9rem;
+  }
+
+  .post-content pre {
+    font-size: .82rem;
+    padding: .95rem 1rem;
+  }
+}
+
+/* ── 打印 ── */
+@media print {
+  .post-content {
+    font-size: 12pt;
+    line-height: 1.7;
+    color: #000;
+  }
+
+  .post-content h2 {
+    border-left-color: #000;
+  }
+
+  .post-content a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .post-content img,
+  .post-content pre,
+  .post-content table {
+    page-break-inside: avoid;
+  }
+}

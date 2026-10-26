@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.9.0');
+define('YIMAI_VERSION', '1.9.1');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -44,6 +44,18 @@ function yimai_enqueue(): void
     // 前台样式已合并为单一 app.css（原 app/fix/mobile-fix 三层合并，
     // 消除了 fix 与 mobile-fix 之间无依赖声明导致的顺序不确定问题）。
     wp_enqueue_style('yimai-app', YIMAI_THEME_URI . '/assets/css/app.css', [], YIMAI_VERSION);
+
+    // 文章正文排版（标题层级 / 表格边框 / 代码块 / 引用 / 图片圆角等）
+    // 仅在单篇与页面加载，避免影响首页与卡片网格等其他 .page-block 区块。
+    if (is_singular()) {
+        wp_enqueue_style(
+            'yimai-article',
+            YIMAI_THEME_URI . '/assets/css/article.css',
+            ['yimai-app'],
+            YIMAI_VERSION
+        );
+    }
+
     wp_enqueue_script('yimai-app', YIMAI_THEME_URI . '/assets/js/app.js', [], YIMAI_VERSION, true);
 
     wp_localize_script('yimai-app', 'yimaiAjax', [
