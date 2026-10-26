@@ -3,6 +3,42 @@
 /* 是否在 WP 后台（wp-admin）内渲染：wp-admin 已提供 HTML 骨架与登录态，
  * 视图此时只输出自身内容；独立 /admin 入口下则输出完整 HTML 文档。 */
 $yimaiInWpAdmin = function_exists('get_current_screen') && get_current_screen() !== null;
+
+/*
+ * 端点与 CSRF 令牌：必须与表单同源，且在 <form> 输出之前算好。
+ *
+ * wp-admin 内的接口是 admin-ajax.php + wp_verify_nonce('yimai_admin_api')，
+ * 令牌只能来自 wp_create_nonce()；csrf_token() 是独立 /admin 入口的会话令牌
+ * （64 位十六进制），与 WP nonce（10 位哈希）永不相等。此前表单隐藏域用的是
+ * csrf_token()，导致 wp-admin 下所有保存都被 check_ajax_referer 判 403
+ * （响应体是裸 -1，前端只能显示一句「保存失败」）。
+ * 现改为单一来源：$yimaiCsrf 同时供给表单隐藏域与 window.CSRF_TOKEN。
+ */
+if ($yimaiInWpAdmin) {
+    $yimaiAjaxBase = admin_url('admin-ajax.php?action=yimai_admin_api');
+    $yimaiEndpoints = [
+        'save'         => $yimaiAjaxBase . '&op=save',
+        'upload'       => $yimaiAjaxBase . '&op=upload',
+        'imgbed-sync'  => $yimaiAjaxBase . '&op=imgbed-sync',
+        'library'      => $yimaiAjaxBase . '&op=library',
+        'update-check' => $yimaiAjaxBase . '&op=update-check',
+        'update-run'   => $yimaiAjaxBase . '&op=update-run',
+        'update-upload' => $yimaiAjaxBase . '&op=update-upload',
+    ];
+    $yimaiCsrf = wp_create_nonce('yimai_admin_api');
+} else {
+    $yimaiEndpoints = [
+        'save'         => yimai_admin_path('save'),
+        'upload'       => yimai_admin_path('upload'),
+        'imgbed-sync'  => yimai_admin_path('imgbed-sync'),
+        'library'      => yimai_admin_path('library'),
+        'update-check' => yimai_admin_path('update-check'),
+        'update-run'   => yimai_admin_path('update-run'),
+        'update-upload' => yimai_admin_path('update-upload'),
+    ];
+    $yimaiCsrf = csrf_token();
+}
+
 $json = wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 $theme_uri = get_template_directory_uri();
 $copySections = ['home' => '首页', 'classes' => '课程', 'instructors' => '师资', 'membership' => '会员', 'booking' => '预约', 'studio' => '空间', 'contact' => '联系', 'training' => '教培'];
@@ -280,7 +316,7 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
 ?>
 <form data-admin-form method="post" action="<?php echo esc_url($formAction); ?>">
 <textarea name="config_json" data-config-json hidden style="display:none!important"><?php echo h($json); ?></textarea>
-<input type="hidden" name="csrf_token" value="<?php echo esc_attr(csrf_token()); ?>">
+<input type="hidden" name="csrf_token" value="<?php echo esc_attr($yimaiCsrf); ?>">
 
 <!-- ===================== 基础与SEO ===================== -->
 <section class="panel active" data-panel="site">
@@ -616,32 +652,7 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
 </div>
 
 <?php
-// 端点注入：wp-admin 内统一走 admin-ajax.php（action=yimai_admin_api&op=<op>），
-// 独立 /admin 入口下走旧路径（yimai_admin_path('<op>')）。
-if ($yimaiInWpAdmin) {
-    $yimaiAjaxBase = admin_url('admin-ajax.php?action=yimai_admin_api');
-    $yimaiEndpoints = [
-        'save'         => $yimaiAjaxBase . '&op=save',
-        'upload'       => $yimaiAjaxBase . '&op=upload',
-        'imgbed-sync'  => $yimaiAjaxBase . '&op=imgbed-sync',
-        'library'      => $yimaiAjaxBase . '&op=library',
-        'update-check' => $yimaiAjaxBase . '&op=update-check',
-        'update-run'   => $yimaiAjaxBase . '&op=update-run',
-        'update-upload' => $yimaiAjaxBase . '&op=update-upload',
-    ];
-    $yimaiCsrf = wp_create_nonce('yimai_admin_api');
-} else {
-    $yimaiEndpoints = [
-        'save'         => yimai_admin_path('save'),
-        'upload'       => yimai_admin_path('upload'),
-        'imgbed-sync'  => yimai_admin_path('imgbed-sync'),
-        'library'      => yimai_admin_path('library'),
-        'update-check' => yimai_admin_path('update-check'),
-        'update-run'   => yimai_admin_path('update-run'),
-        'update-upload' => yimai_admin_path('update-upload'),
-    ];
-    $yimaiCsrf = csrf_token();
-}
+// 端点与令牌已在视图开头算好（见文件顶部注释）；这里只准备脚本内联用的 JSON 转义标志位。
 $yimaiJsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 ?>
 <script>

@@ -1,5 +1,12 @@
 # 更新日志
 
+## v1.9.2 · 2026-10-27
+- **修复生产后台「保存全部更改」永远失败（保存按钮报了保存失败、改动不落库）**：v1.8.0 把内容后台搬进 wp-admin 后，保存表单的隐藏域仍填独立 /admin 入口的会话令牌（`csrf_token()`，64 位十六进制），而 `admin-ajax.php` 接口按 WP nonce（`wp_verify_nonce`，10 位哈希）校验——两者来源不同、长度不同，**永远不可能相等**，所以 wp-admin 下的每一次保存都被判 403。又因为 WP 用 `wp_die('-1')` 结束请求，响应体是裸 `-1`、没有 `message` 字段，前端只能落到兜底文案「保存失败」，看不出任何原因
+  - 令牌改为**单一来源**：视图开头先算出 `$yimaiCsrf`（wp-admin 下 `wp_create_nonce('yimai_admin_api')`，独立 /admin 下 `csrf_token()`），同时供给表单隐藏域与 `window.CSRF_TOKEN`，与 `<form>` 输出顺序无关
+  - 接口不再用 `check_ajax_referer` 的静默 `-1`：改为 `wp_verify_nonce` 自行校验（强度不变，12/24 小时时限不变），失败时返回可读 JSON「页面令牌已过期（通常超过 24 小时未刷新），请按 Ctrl+F5 刷新本页后重新保存」
+- **修复「活动公告弹窗关不掉」的另一半原因**：活动列表的字段路径直拼 `announcements.<下标>.标题`，而真实结构是 `announcements.items.<下标>.标题`。于是活动标题、内容、起止日期、启用开关的修改全部写到一个不存在的 `announcements.0` 键里，保存后列表项纹丝不动（弹出内容永远是最初用原始 JSON 存进去的那条）。现列表编辑器的字段路径统一走别名 `LIST_ALIASES`（唯一入口），改标题、改日期、关「启用」都能真正保存
+- 新增回归测试 `tests/admin-save-auth-test.php`（23 项断言）：WP nonce 保存成功且 `announcements.enabled=false` 真正落库、会话令牌/空令牌被拒且不写库、表单令牌先于表单生成、活动字段走别名路径
+
 ## v1.9.1 · 2026-10-27
 - 新增**文章正文排版样式**（`assets/css/article.css`，仅在单篇/页面通过 `is_singular()` 加载，不影响首页与卡片网格）：
   - **表格**：此前主题完全没有 table 规则，插件生成的表格在页面上没有任何边框。现补齐 `border-collapse`、单元格 1px 边框与内边距、表头浅底加粗、偶数行斑马纹、悬停高亮，窄屏横向滚动（参考 github-markdown-css 的表格处理方式）

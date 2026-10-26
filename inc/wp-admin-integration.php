@@ -57,15 +57,21 @@ add_action('wp_ajax_yimai_admin_api', function (): void {
     if (!current_user_can('manage_options')) {
         json_response(['message' => '权限不足'], 403);
     }
-    // check_ajax_referer 默认只读 _ajax_nonce/_wpnonce/QUERY 参数；
-    // 我们的前端走自定义 csrf_token 字段或 X-CSRF-TOKEN 头，先回填再校验。
+    // 我们的前端走自定义 csrf_token 字段或 X-CSRF-TOKEN 头，check_ajax_referer
+    // 默认只读 _ajax_nonce/_wpnonce/QUERY，故先回填。
     if (empty($_REQUEST['csrf_token'])) {
         $headerToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (is_string($headerToken) && $headerToken !== '') {
             $_REQUEST['csrf_token'] = $headerToken;
         }
     }
-    check_ajax_referer(YIMAI_ADMIN_NONCE_ACTION, 'csrf_token');
+    // 不用 check_ajax_referer：它失败时 wp_die('-1')，前端 res.json() 拿到裸 -1、
+    // 没有 message 字段，只能显示一句无信息量的「保存失败」。这里自行校验并返回
+    // 可读原因——校验强度等同（wp_verify_nonce，12/24 小时时限不变）。
+    $nonce = $_REQUEST['csrf_token'] ?? '';
+    if (!is_string($nonce) || !wp_verify_nonce($nonce, YIMAI_ADMIN_NONCE_ACTION)) {
+        json_response(['message' => '页面令牌已过期（通常超过 24 小时未刷新），请按 Ctrl+F5 刷新本页后重新保存'], 403);
+    }
 
     $op = (string) ($_REQUEST['op'] ?? '');
 

@@ -50,6 +50,56 @@ function delete_transient($transient): bool
     return true;
 }
 
+// ---- 钩子 / 权限 / nonce（inc/wp-admin-integration.php 依赖） ----
+$GLOBALS['__hooks'] = [];
+function add_action(string $hook, $callback, int $priority = 10, int $accepted_args = 1): bool
+{
+    $GLOBALS['__hooks'][$hook][] = $callback;
+    return true;
+}
+function add_filter(string $hook, $callback, int $priority = 10, int $accepted_args = 1): bool
+{
+    return add_action($hook, $callback, $priority, $accepted_args);
+}
+function apply_filters(string $hook, $value, ...$args)
+{
+    return $value;
+}
+function do_action(string $hook, ...$args): void
+{
+}
+function has_action(string $hook, $callback = false)
+{
+    return false;
+}
+function do_action_stub(string $hook): void
+{
+    foreach ($GLOBALS['__hooks'][$hook] ?? [] as $callback) {
+        $callback();
+    }
+}
+function current_user_can(string $capability): bool
+{
+    return true;
+}
+function get_current_user_id(): int
+{
+    return 1;
+}
+/**
+ * nonce 桩：形状对齐 WP —— 由 action 派生、长度 10 的哈希串。
+ * 关键性质：任何「另一种来源」的令牌（如独立后台的 64 位会话令牌）都不可能与它相等。
+ */
+function wp_create_nonce(string $action = '-1'): string
+{
+    return substr(hash('sha256', 'stub|' . $action . '|' . get_current_user_id()), -10);
+}
+function wp_verify_nonce($nonce, string $action = '-1')
+{
+    $expected = wp_create_nonce($action);
+    return is_string($nonce) && hash_equals($expected, $nonce) ? 1 : false;
+}
+
 // ---- 杂项 ----
 function current_time(string $type = 'mysql', bool $gmt = false)
 {

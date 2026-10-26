@@ -216,14 +216,17 @@
     if(!schema){return}
     host.innerHTML=list.map(function(item,idx){
       var name=item.name||item.label||item.title||item.q||('项目 '+(idx+1));
+      // 字段路径必须走别名后的真实结构：announcements 存在 announcements.items 下，
+      // 若按 key 直拼会写到 announcements.0.*，列表项（活动标题/日期/启用）永远存不进 items。
+      var base=LIST_ALIASES[key]||key;
       var html='<div class="item" data-idx="'+idx+'">';
       html+='<div class="item-head"><b>'+esc(name)+'</b><span class="ops">';
       html+='<button type="button" class="del" data-del-item="'+key+'" data-idx="'+idx+'">删除</button></span></div>';
       html+='<div class="grid2">';
       schema.fields.forEach(function(f){
-        var path=key+'.'+idx+'.'+f[0];
+        var path=base+'.'+idx+'.'+f[0];
         var v=item[f[0]];
-        if(key==='faqs'){path=key+'.'+idx+'.'+(f[0]==='q'?'0':'1');v=item[f[0]==='q'?0:1]}
+        if(key==='faqs'){path=base+'.'+idx+'.'+(f[0]==='q'?'0':'1');v=item[f[0]==='q'?0:1]}
         if(f[2]==='image'){html+=imageBlockHtml(path,v)}
         else if(f[2]==='textarea'){html+=fieldHtml(path,f[1],'textarea',v,'rows="3"')}
         else{html+=fieldHtml(path,f[1],f[2]||'text',v)}
