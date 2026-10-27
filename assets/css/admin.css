@@ -7,3 +7,6 @@
 /* ==== 字号覆盖（原 fix.css 中命中后台元素的部分） ==== */
 .admin-login h1,.admin-topbar h1{font-size:2.3rem}.admin-panel h2{font-size:1.9rem}
 @media (max-width:700px){.admin-login h1,.admin-topbar h1{font-size:2rem}.admin-panel h2{font-size:1.75rem}}
+
+/* ==== 门店 GEO/邮编/营业时间字段：非法值标红 ==== */
+.admin-form input.invalid,.item input.invalid{border-color:var(--color-clay);background:rgb(var(--color-clay-rgb)/.06)}

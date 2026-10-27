@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.9.2');
+define('YIMAI_VERSION', '1.9.3');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -46,8 +46,8 @@ function yimai_enqueue(): void
     wp_enqueue_style('yimai-app', YIMAI_THEME_URI . '/assets/css/app.css', [], YIMAI_VERSION);
 
     // 文章正文排版（标题层级 / 表格边框 / 代码块 / 引用 / 图片圆角等）
-    // 仅在单篇与页面加载，避免影响首页与卡片网格等其他 .page-block 区块。
-    if (is_singular()) {
+    // 仅在单篇与页面加载（首页是静态首屏 + 卡片网格，不加载，省一次请求）。
+    if (is_singular() && !is_front_page()) {
         wp_enqueue_style(
             'yimai-article',
             YIMAI_THEME_URI . '/assets/css/article.css',
@@ -115,19 +115,31 @@ function yimai_wecom_webhook(): string
 /* -------------------------------------------------------------------------
  * SEO：标题与描述（用后台配置的 site.title / site.description）
  * ---------------------------------------------------------------------- */
+/**
+ * 标题接管：document_title_parts 里 title / tagline / site 三个键都要归位。
+ * 只改 title 会漏掉 WP 自动追加的 tagline（首页）与 site（子页面），
+ * 结果是「主标题 | 副标题 | 站点名」或「页面名 | 品牌 | 品牌」（品牌重复两次）。
+ */
 function yimai_document_title_parts(array $parts): array
 {
     $config = yimai_config();
     $siteTitle = trim((string) ($config['site']['title'] ?? ''));
-    if ($siteTitle !== '') {
-        if (is_front_page() || is_home()) {
-            $parts['title'] = $siteTitle;
-        } else {
-            // 子页面：页面名 | 网站名（用配置里的主标题）
-            $configName = trim((string) ($config['site']['name'] ?? ''));
-            $parts['title'] = ($parts['title'] ?? '') . ' | ' . ($configName !== '' ? $configName : $siteTitle);
-        }
+    if ($siteTitle === '') {
+        return $parts;
     }
+    // 无论哪类页面，WP 默认追加的两段（tagline / site）都由我们接管
+    $parts['tagline'] = '';
+    $parts['site'] = '';
+    if (is_front_page() || is_home()) {
+        // 首页：只用配置主标题（控制在 30 个汉字内），不拼副标题与站点名
+        $parts['title'] = $siteTitle;
+        return $parts;
+    }
+    // 子页面：页面名 | 网站名。标题为空时只出品牌，避免生成以分隔符开头的「| 品牌」
+    $configName = trim((string) ($config['site']['name'] ?? ''));
+    $brand = $configName !== '' ? $configName : $siteTitle;
+    $pageTitle = trim((string) ($parts['title'] ?? ''));
+    $parts['title'] = $pageTitle === '' ? $brand : $pageTitle . ' | ' . $brand;
     return $parts;
 }
 add_filter('document_title_parts', 'yimai_document_title_parts', 20);
@@ -141,6 +153,11 @@ function yimai_meta_description(): void
     if (is_singular()) {
         $post_id = (int) get_the_ID();
         $singular_desc = trim((string) get_post_meta($post_id, 'yimai_gso_excerpt', true));
+        // /contact 的页面正文是演示样稿：优先用 copy.contact.description 的中文 NAP 摘要，
+        // 不让英文占位文案进入搜索结果摘要（仍让位于 GSO 生成的文章级 SEO 摘要）。
+        if ($singular_desc === '' && is_page('contact')) {
+            $singular_desc = trim((string) ($config['copy']['contact']['description'] ?? ''));
+        }
         if ($singular_desc === '') {
             $post_obj = get_post($post_id);
             if ($post_obj) {
@@ -209,30 +226,23 @@ function yimai_meta_description(): void
             }
         }
     }
-    // 结构化数据：本地商家（宁波门店信息来自配置）。GSO 插件配置 GEO 实体后会输出
-    // 增强版门店 Schema（含 geo/营业时间等），此时主题这份简化版让位，避免重复。
-    if ($gso_active && class_exists('YIMAI_GSO_GEO_Entity') && YIMAI_GSO_GEO_Entity::is_configured()) {
-        return;
-    }
+    // 结构化数据：门店实体。归属见 yimai_theme_owns_local_schema()：
+    // 旧插件（< 2.11.0）自己会输出 1 个无坐标的 LocalBusiness，主题必须让位，
+    // 否则同页变成 3 个本地商家节点（NAP 冲突）；插件缺失或已是新契约时由主题输出两店。
+    // $site 原本只在「插件未激活」的 OG 分支里赋值，插件激活时这里会是未定义变量
+    $site = is_array($config['site'] ?? null) ? $config['site'] : [];
     $studios = is_array($config['studios'] ?? null) ? $config['studios'] : [];
-    if ($studios !== [] && (is_front_page() || is_home())) {
+    if (yimai_theme_owns_local_schema() && $studios !== [] && (is_front_page() || is_home())) {
         $shops = [];
         foreach ($studios as $studio) {
             if (!is_array($studio) || trim((string) ($studio['name'] ?? '')) === '') {
                 continue;
             }
-            $shops[] = [
-                '@type' => 'HealthAndBeautyBusiness',
-                'name' => (string) ($site['name'] ?? '') . ' · ' . $studio['name'],
-                'telephone' => (string) ($studio['phone'] ?? ''),
-                'address' => [
-                    '@type' => 'PostalAddress',
-                    'streetAddress' => (string) ($studio['address'] ?? ''),
-                    'addressRegion' => '浙江省',
-                    'addressLocality' => '宁波市',
-                    'addressCountry' => 'CN',
-                ],
-            ];
+            // 没有任何合法 geo 的门店不输出节点：半截 LocalBusiness 会被 Rich Results 报错，比没有更糟
+            $shop = yimai_studio_schema($studio, $site);
+            if ($shop !== null) {
+                $shops[] = $shop;
+            }
         }
         if ($shops !== []) {
             $ld = ['@context' => 'https://schema.org', '@graph' => $shops];
@@ -243,6 +253,140 @@ function yimai_meta_description(): void
     }
 }
 add_action('wp_head', 'yimai_meta_description', 1);
+
+/**
+ * 门店 LocalBusiness 由谁输出：插件未装 → 主题兜底；插件 >= 2.11.0 → 主题接管；旧插件 → 让位。
+ * 用版本号而不是 method_exists：后者依赖插件内部方法名，改名就静默失效。
+ * 阈值 2.11.0 与插件侧 union 契约同步。守卫存在时四种组合都不会产生重复本地实体：
+ *   插件未装        → 主题输出两店；
+ *   插件 < 2.11.0   → 主题让位，门店 Schema 由插件输出（1 个 LocalBusiness，旧形态），主题一个都不出；
+ *   插件 >= 2.11.0  → 主题接管两店，插件侧 LocalBusiness 由 yimai_gso_emit_local_business 关闭，
+ *                     无坐标时降级为 Organization。
+ * 升级顺序：先主题、后插件（先升插件会出现「只有 Organization、无 LocalBusiness」的空窗）。
+ */
+function yimai_theme_owns_local_schema(): bool
+{
+    if (!defined('YIMAI_GSO_VERSION')) {
+        return true;
+    }
+    return version_compare((string) YIMAI_GSO_VERSION, '2.11.0', '>=');
+}
+
+/**
+ * 门店 GEO / 邮编 / 营业时间的服务端校验规则在 inc/site-data.php 的
+ * yimai_studio_geo_sanitize()：后台保存与前台输出共用同一份，避免两边规则漂移。
+ * 非法值不是拒绝保存，而是清空该字段（与 admin.js 的「标红置空」一致）。
+ */
+function yimai_studio_geo_clean(array $studio): array
+{
+    return yimai_studio_geo_sanitize($studio);
+}
+
+/**
+ * 单家门店 → HealthAndBeautyBusiness 节点；没有合法 geo 时返回 null（调用方跳过该店）。
+ * geo 从门店字段读，旧 DB 记录缺键时回落默认结构里同名门店的占位坐标。
+ */
+function yimai_studio_schema(array $studio, array $site): ?array
+{
+    // 输出侧再校验一次：绕过后台 JS 直接写库的脏值（lat=200 / postalCode=abc）不会进 JSON-LD
+    $studio = yimai_studio_geo_clean($studio);
+    // 旧 DB 记录缺 geo/邮编等字段时，按店名回落默认结构里同一家店的占位值
+    $fallback = yimai_studio_geo_clean(yimai_studio_defaults()[trim((string) ($studio['name'] ?? ''))] ?? []);
+    $lat = trim((string) ($studio['latitude'] ?? ''));
+    $lng = trim((string) ($studio['longitude'] ?? ''));
+    if ($lat === '' || $lng === '') {
+        $lat = trim((string) ($fallback['latitude'] ?? ''));
+        $lng = trim((string) ($fallback['longitude'] ?? ''));
+    }
+    if (!is_numeric($lat) || !is_numeric($lng)) {
+        return null;
+    }
+    $shop = [
+        '@type' => 'HealthAndBeautyBusiness',
+        'name' => (string) ($site['name'] ?? '') . ' · ' . $studio['name'],
+        'telephone' => (string) ($studio['phone'] ?? ''),
+        'address' => [
+            '@type' => 'PostalAddress',
+            'streetAddress' => (string) ($studio['address'] ?? ''),
+            'addressRegion' => '浙江省',
+            'addressLocality' => '宁波市',
+            'addressCountry' => 'CN',
+        ],
+        'geo' => [
+            '@type' => 'GeoCoordinates',
+            'latitude' => (float) $lat,
+            'longitude' => (float) $lng,
+        ],
+    ];
+    $postalCode = trim((string) ($studio['postalCode'] ?? ($fallback['postalCode'] ?? '')));
+    if ($postalCode !== '') {
+        $shop['address']['postalCode'] = $postalCode;
+    }
+    // 营业时间为空就整段省略：合法的本地商家允许没有营业时间，但不允许写错的时间
+    $hours = yimai_opening_hours_spec($studio['openingHours'] ?? []);
+    if ($hours !== []) {
+        $shop['openingHoursSpecification'] = $hours;
+    }
+    return $shop;
+}
+
+/** 默认结构里同名门店的索引（旧 DB 缺 geo 等字段时的回落来源） */
+function yimai_studio_defaults(): array
+{
+    static $defaults = null;
+    if ($defaults !== null) {
+        return $defaults;
+    }
+    $defaults = [];
+    foreach ((array) (yimai_site_data(false)['studios'] ?? []) as $defaultStudio) {
+        if (is_array($defaultStudio) && isset($defaultStudio['name'])) {
+            $defaults[(string) $defaultStudio['name']] = $defaultStudio;
+        }
+    }
+    return $defaults;
+}
+
+/**
+ * 只有主题确实持有门店 Schema 时才关掉插件那份 LocalBusiness；
+ * 旧插件根本不认识这个 filter，注册了也是假生效，不如不注册。
+ */
+if (yimai_theme_owns_local_schema()) {
+    add_filter('yimai_gso_emit_local_business', '__return_false');
+}
+
+/**
+ * FAQPage 结构化数据：只在真正展示 FAQ 的页面输出（当前仅 /contact 的 .faq-panel），
+ * 避免全站每页都声明同一组问答被搜索引擎判为重复标记。
+ * 问答数据与前台展示同源（yimai_faqs），元组与 {q,a} 两种形状都兼容。
+ */
+function yimai_faq_schema(): void
+{
+    if (!is_page('contact')) {
+        return;
+    }
+    $items = [];
+    foreach (yimai_faqs() as $faq) {
+        $faq = is_array($faq) ? $faq : [];
+        $question = trim((string) ($faq[0] ?? ($faq['q'] ?? '')));
+        $answer = trim((string) ($faq[1] ?? ($faq['a'] ?? '')));
+        if ($question === '' || $answer === '') {
+            continue;
+        }
+        $items[] = [
+            '@type' => 'Question',
+            'name' => $question,
+            'acceptedAnswer' => ['@type' => 'Answer', 'text' => $answer],
+        ];
+    }
+    if ($items === []) {
+        return;
+    }
+    $ld = ['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => $items];
+    echo "\n<script type=\"application/ld+json\">"
+        . wp_json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+        . '</script>';
+}
+add_action('wp_head', 'yimai_faq_schema', 2);
 
 /** 404 页标记 noindex，避免被搜索引擎收录 */
 function yimai_robots_404(array $robots): array
@@ -428,6 +572,74 @@ function yimai_faqs(): array
 {
     $config = yimai_config();
     return $config['faqs'] ?? [];
+}
+
+/**
+ * 门店电话 → tel: 拨号号码（模板里写成 href="tel:+86<?php echo … ?>"）。
+ * 去除非数字字符；座机去掉国内长途前缀 0；号码不可用时返回空串（模板据此不渲染链接）。
+ */
+function yimai_tel_number(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone);
+    if (!is_string($digits) || $digits === '') {
+        return '';
+    }
+    // 已经是国际格式（86574… / 8613…）时先剥掉 86，避免拼出 +8686…
+    if (str_starts_with($digits, '86') && strlen($digits) > 11) {
+        $digits = substr($digits, 2);
+    }
+    if (str_starts_with($digits, '0')) {
+        $digits = substr($digits, 1);
+    }
+    return $digits;
+}
+
+/**
+ * 营业时间（如 'Mo-Su 09:00-21:30'，可传数组）→ schema.org openingHoursSpecification。
+ * 只解析认得的写法，认不出就跳过：Schema 里宁缺勿错。
+ */
+function yimai_opening_hours_spec(mixed $hours): array
+{
+    $days = [
+        'mo' => 'Monday', 'tu' => 'Tuesday', 'we' => 'Wednesday', 'th' => 'Thursday',
+        'fr' => 'Friday', 'sa' => 'Saturday', 'su' => 'Sunday',
+    ];
+    $order = array_values($days);
+    if (is_string($hours)) {
+        $hours = [$hours];
+    }
+    if (!is_array($hours)) {
+        return [];
+    }
+    $specs = [];
+    foreach ($hours as $line) {
+        if (!is_string($line) || trim($line) === '') {
+            continue;
+        }
+        // 一行可写多段（逗号分隔）；支持 'Mo-Su 09:00-21:30' 与单日 'Mo 10:00-22:00'
+        foreach (explode(',', $line) as $chunk) {
+            if (!preg_match('/^\s*([A-Za-z]{2})(?:\s*-\s*([A-Za-z]{2}))?\s+([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)\s*$/', $chunk, $m)) {
+                continue;
+            }
+            $from = $days[strtolower($m[1])] ?? '';
+            $to = $m[2] !== '' ? ($days[strtolower($m[2])] ?? '') : $from;
+            if ($from === '' || $to === '') {
+                continue;
+            }
+            $start = array_search($from, $order, true);
+            $end = array_search($to, $order, true);
+            if (!is_int($start) || !is_int($end) || $end < $start) {
+                continue;
+            }
+            $specs[] = [
+                '@type' => 'OpeningHoursSpecification',
+                'dayOfWeek' => array_slice($order, $start, $end - $start + 1),
+                'opens' => $m[3] . ':' . $m[4],
+                'closes' => $m[5] . ':' . $m[6],
+            ];
+        }
+    }
+    return $specs;
 }
 
 /* -------------------------------------------------------------------------

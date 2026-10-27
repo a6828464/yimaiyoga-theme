@@ -30,7 +30,16 @@ $faqs   = yimai_faqs();
 <section class="contact-grid page-block">
   <div>
     <?php foreach (yimai_studios() as $studio): ?>
-      <article class="reveal"><h2><?php echo esc_html($studio['name']); ?></h2><p><?php echo esc_html($studio['address']); ?></p><strong><?php echo esc_html($studio['phone']); ?></strong></article>
+      <?php $telNumber = yimai_tel_number((string) ($studio['phone'] ?? '')); ?>
+      <article class="reveal">
+        <h2><?php echo esc_html($studio['name'] ?? ''); ?></h2>
+        <p><?php echo esc_html($studio['address'] ?? ''); ?></p>
+        <?php if ($telNumber !== ''): ?>
+          <strong><a class="tel-link" href="tel:+86<?php echo esc_attr($telNumber); ?>"><?php echo esc_html($studio['phone'] ?? ''); ?></a></strong>
+        <?php else: ?>
+          <strong><?php echo esc_html($studio['phone'] ?? ''); ?></strong>
+        <?php endif; ?>
+      </article>
     <?php endforeach; ?>
   </div>
   <div class="faq-panel reveal">

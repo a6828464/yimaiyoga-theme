@@ -20,7 +20,8 @@ $icpNumber = $site['icpNumber'] ?? '';
   <div class="footer-grid">
     <div>
       <p class="eyebrow muted-light">Yi Mai Yoga</p>
-      <h2>看见·包容·超越</h2>
+      <?php // 品牌口号不是页面标题层级（原 <h2> 会污染文档大纲），改用语义正确的段落 + 独立样式类 ?>
+      <p class="footer-slogan">看见·包容·超越</p>
       <p>通过瑜伽与普拉提，让都市女性面对自我，对话身体和心灵，在一麦遇见更好的自己。</p>
     </div>
     <div class="footer-links">
@@ -31,10 +32,15 @@ $icpNumber = $site['icpNumber'] ?? '';
     </div>
     <div class="footer-studios">
       <?php foreach (yimai_studios() as $studio): ?>
+        <?php $telNumber = yimai_tel_number((string) ($studio['phone'] ?? '')); ?>
         <div>
-          <strong><?php echo esc_html($studio['name']); ?></strong>
-          <span><?php echo esc_html($studio['address']); ?></span>
-          <span><?php echo esc_html($studio['phone']); ?></span>
+          <strong><?php echo esc_html($studio['name'] ?? ''); ?></strong>
+          <span><?php echo esc_html($studio['address'] ?? ''); ?></span>
+          <?php if ($telNumber !== ''): ?>
+            <a class="tel-link" href="tel:+86<?php echo esc_attr($telNumber); ?>"><?php echo esc_html($studio['phone'] ?? ''); ?></a>
+          <?php else: ?>
+            <span><?php echo esc_html($studio['phone'] ?? ''); ?></span>
+          <?php endif; ?>
         </div>
       <?php endforeach; ?>
     </div>

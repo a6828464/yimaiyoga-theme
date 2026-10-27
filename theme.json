@@ -1,6 +1,6 @@
 {
     "name": "yimaiyoga",
-    "version": "1.9.2",
+    "version": "1.9.3",
     "updated": "2026-10-27",
     "notes": [
         "修复生产后台「保存全部更改」永远失败：wp-admin 模式下表单隐藏域填的是独立 /admin 的会话令牌（64 位十六进制），接口却按 WP nonce（10 位哈希）校验，两者永不相等 → 每次保存都被判 403，而 WP 以裸 -1 终止请求，前端拿不到原因，只显示一句「保存失败」",
@@ -21,6 +21,10 @@
         "修复：每页重复输出两条 meta description；内联脚本 JSON 转义加固；无 JS 时首页内容不可见",
         "新增：预约记录落库（后台可查看），未配置企业微信 Webhook 时不再静默丢失预约",
         "新增：Open Graph / Twitter 卡片 / canonical / 本地商家结构化数据；404 页 noindex",
-        "优化：前台三个 CSS 合并为单一样式表并抽离后台样式；配置读取加缓存；发布脚本改用 git archive 并校验版本一致性"
+        "优化：前台三个 CSS 合并为单一样式表并抽离后台样式；配置读取加缓存；发布脚本改用 git archive 并校验版本一致性",
+        "【发布顺序：先主题、后插件；回滚反向】含 yimai_theme_owns_local_schema() 守卫，四态均不产生重复本地实体：插件未装=主题输出两店；插件<2.11.0=主题让位、由插件输出 1 个旧形态 LocalBusiness；插件>=2.11.0=主题接管两店、插件侧 LocalBusiness 由 yimai_gso_emit_local_business filter 关闭（无坐标时降级 Organization）。先升插件会出现数分钟「只有 Organization 无 LocalBusiness」的空窗，故先主题后插件",
+        "门店 Schema 输出前校验合法 geo：缺经纬度的门店整段不输出节点（后台新增第三家店忘填坐标时不会产出半截 LocalBusiness）；营业时间未核实前留空，宁可不出 openingHoursSpecification 也不声明编造时间",
+        "后台门店编辑器补纬度/经度/邮编/营业时间四个字段，带数值范围与 Mo-Su 09:00-21:30 格式校验，非法即清空标红；修复「后台保存一次就把这四项抹掉」",
+        "面包屑可见层改用文章主分类（与结构化数据同源），F. 标题为空时只输出品牌名；文末相关阅读有界补齐到 3 条（/classes→/booking→/blog 顺序，/classes 恒在）"
     ]
 }

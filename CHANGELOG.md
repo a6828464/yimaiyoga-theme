@@ -1,5 +1,25 @@
 # 更新日志
 
+## v1.9.3 · 2026-10-27
+
+> **发布顺序：先主题、后插件（回滚反向：先回主题、再回插件）。**
+> 本版含 `yimai_theme_owns_local_schema()` 守卫，下列四种组合均不会产生重复本地实体：
+>
+> · 插件未装 → 主题输出两店 HealthAndBeautyBusiness
+> · 插件 < 2.11.0 → 主题让位，门店 Schema 由插件输出（1 个 LocalBusiness，旧形态），主题一个都不出
+> · 插件 >= 2.11.0 → 主题接管，输出 2 个 HealthAndBeautyBusiness；插件侧 LocalBusiness 由 `yimai_gso_emit_local_business` filter 关闭，无坐标时降级为 Organization
+>
+> 建议顺序为先主题后插件：先升插件会出现数分钟「只有 Organization、无 LocalBusiness」的空窗，先升主题则始终至少有 1 个本地实体、无空窗。
+
+- **门店 LocalBusiness 归属改为按契约版本判定**（`yimai_theme_owns_local_schema()`）：插件未装 → 主题兜底；GSO ≥ 2.11.0 → 主题接管两店、并 `add_filter('yimai_gso_emit_local_business','__return_false')` 关掉插件那份；GSO < 2.11.0 → 主题让位（不注册该 filter，也不输出两店）。用 `version_compare` 而不是 `method_exists`，插件内部方法改名不会静默失效
+- **门店节点输出前校验合法 geo**：没有经纬度的门店整段不输出（后台新增第三家店忘填坐标时，不会再产出半截 LocalBusiness 被 Rich Results 报错）；服务端与前端同规则（|lat|≤90、|lng|≤180、邮编 6 位、营业时间格式），不合法的值按「清空该字段」处理而非拒绝保存，绕过后台 JS 直接写库也只会省略、不会产出非法 JSON-LD
+- **营业时间不再编造**：`inc/site-data.php` 两店的 `openingHours` 默认值改为空，未核对前不出 `openingHoursSpecification`。合法本地商家允许没有营业时间，但不允许写错的时间——客户按搜索结果到店吃闭门羹是最伤的一类错误
+- **后台门店编辑器补齐 latitude/longitude/postalCode/openingHours 四个字段**（数值范围 ±90/±180、邮编 6 位、营业时间 `Mo-Su 09:00-21:30` 格式校验，非法即清空并标红）。此前 `studios` 是列表整体替换、编辑器又没有这四个输入，**后台保存一次就会把它们全部抹掉**
+- **可见面包屑改用文章主分类**（`首页 / 分类 / 标题`），与插件 BreadcrumbList 同源同层级。已知差异：文章落在「未分类」或没有分类时，可见层回退到 `/blog`，而插件 JSON-LD 仍取分类对象（未分类显示「未分类」）——属分类归属的数据问题，不改代码
+- 标题为空时只输出品牌名，不再生成以分隔符开头的「| 一麦瑜伽·普拉提」
+- 文末相关阅读改为有界补齐到 3 条（`/classes` → `/booking` → `/blog`，已存在同 URL 跳过），`/classes` 恒在，不会再出现只有 1-2 条的情况
+- 预约表单 `?interest` 预选收紧：只接受命中 `booking.interests` 或 `courseThemes` 标题的白名单值，长度截断 40 字，不命中就忽略
+
 ## v1.9.2 · 2026-10-27
 - **修复生产后台「保存全部更改」永远失败（保存按钮报了保存失败、改动不落库）**：v1.8.0 把内容后台搬进 wp-admin 后，保存表单的隐藏域仍填独立 /admin 入口的会话令牌（`csrf_token()`，64 位十六进制），而 `admin-ajax.php` 接口按 WP nonce（`wp_verify_nonce`，10 位哈希）校验——两者来源不同、长度不同，**永远不可能相等**，所以 wp-admin 下的每一次保存都被判 403。又因为 WP 用 `wp_die('-1')` 结束请求，响应体是裸 `-1`、没有 `message` 字段，前端只能落到兜底文案「保存失败」，看不出任何原因
   - 令牌改为**单一来源**：视图开头先算出 `$yimaiCsrf`（wp-admin 下 `wp_create_nonce('yimai_admin_api')`，独立 /admin 下 `csrf_token()`），同时供给表单隐藏域与 `window.CSRF_TOKEN`，与 `<form>` 输出顺序无关

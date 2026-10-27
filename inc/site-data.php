@@ -54,6 +54,53 @@ class Yimai_Config_Type_Error extends InvalidArgumentException
 }
 
 /**
+ * 门店 GEO / 邮编 / 营业时间规范化：非法值清空该字段，不拒绝保存
+ * （与后台 assets/js/admin.js 的 STUDIO_RULES「标红置空」一致，也避免一次手误让整份配置存不进）。
+ * 规则：|lat|≤90、|lng|≤180、邮编 6 位数字、营业时间 Mo-Su 09:00-21:30（可逗号分段）。
+ * 留空合法＝不声明。这里不依赖 functions.php，admin 侧脚本可单独加载本文件。
+ */
+function yimai_studio_geo_sanitize(array $studio): array
+{
+    $num = static function (mixed $value, float $limit): string {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '';
+        }
+        return preg_match('/^-?\d{1,3}(\.\d+)?$/', $raw) && abs((float) $raw) <= $limit ? $raw : '';
+    };
+    $hours = static function (mixed $value): string {
+        if (is_array($value)) {
+            $value = implode(',', array_map('strval', $value));
+        }
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '';
+        }
+        foreach (explode(',', $raw) as $segment) {
+            if (!preg_match('/^\s*[A-Za-z]{2}(\s*-\s*[A-Za-z]{2})?\s+([01]?\d|2[0-3]):[0-5]\d\s*-\s*([01]?\d|2[0-3]):[0-5]\d\s*$/', $segment)) {
+                return '';
+            }
+        }
+        return $raw;
+    };
+
+    if (array_key_exists('latitude', $studio)) {
+        $studio['latitude'] = $num($studio['latitude'], 90);
+    }
+    if (array_key_exists('longitude', $studio)) {
+        $studio['longitude'] = $num($studio['longitude'], 180);
+    }
+    if (array_key_exists('postalCode', $studio)) {
+        $postal = trim((string) $studio['postalCode']);
+        $studio['postalCode'] = preg_match('/^\d{6}$/', $postal) ? $postal : '';
+    }
+    if (array_key_exists('openingHours', $studio)) {
+        $studio['openingHours'] = $hours($studio['openingHours']);
+    }
+    return $studio;
+}
+
+/**
  * 按默认结构校验并规范化配置值（递归）。
  *
  * 只校验默认结构里「已知」的键；未知键原样保留（前台不读，无风险）。
@@ -71,7 +118,15 @@ function yimai_config_validate(mixed $value, mixed $default, string $path): mixe
         if (!yimai_is_list($value)) {
             throw new Yimai_Config_Type_Error($path . ' 应为列表（键需从 0 连续递增）');
         }
-        return array_values($value);
+        $value = array_values($value);
+        // 门店 GEO / 邮编 / 营业时间：列表项不经逐键校验，在这里补一次格式规范化
+        if (str_ends_with($path, 'studios')) {
+            $value = array_map(
+                static fn ($studio) => is_array($studio) ? yimai_studio_geo_sanitize($studio) : $studio,
+                $value
+            );
+        }
+        return $value;
     }
 
     // 默认是映射：必须给数组，逐键递归校验
@@ -203,6 +258,9 @@ function yimai_site_data(bool $with_db = true): array
 找回松弛的力量。',
                 'heroDescription' => '宁波高端瑜伽普拉提空间。为女性身体建立力量、秩序与松弛感，让练习成为一种更精致的生活方式。',
                 'heroNote' => '看见身体，包容当下，在一次次稳定练习里超越自己。',
+                // 首页首屏转化入口（hero 内两个链接）：文案走配置，模板不硬编码
+                'ctaPrimary' => '预约体验课',
+                'ctaSecondary' => '先看课程主题',
                 'philosophyEyebrow' => 'Philosophy · 品牌理念',
                 'philosophyTitle' => '练习，是一种更温柔的自我尊重。',
                 'philosophyDescription' => '一麦不把练习推向更快、更满、更热闹。我们相信高级的身体体验，来自精准、节制、被照顾的细节。',
@@ -230,6 +288,8 @@ function yimai_site_data(bool $with_db = true): array
                 'sideDescription' => '用户真正关心的不是课程分类，而是“我适合什么、能改善什么、什么时间可以练”。一麦用丰富主题和多时段排课，承接不同阶段的身体需求。',
                 'chooseEyebrow' => 'How to choose',
                 'chooseTitle' => '私教、小班、团课，承接不同练习目标。',
+                // 课程卡转化按钮文案（→ /booking?interest=<课程主题>）
+                'cardCta' => '约这节课',
             ],
             'instructors' => [
                 'eyebrow' => '师资团队',
@@ -262,6 +322,9 @@ function yimai_site_data(bool $with_db = true): array
             'contact' => [
                 'eyebrow' => '联系与常见问题',
                 'title' => '有些问题，适合先聊一聊。',
+                // 中文 NAP 摘要（名称/地址/电话）：/contact 的 meta description 优先读它，
+                // 避免页面正文是演示样稿时把英文占位文案带进搜索结果。
+                'description' => '一麦瑜伽·普拉提在宁波设两家直营店：东部店（鄞州区杉杉国贸天地D幢2楼，0574-87567277）、绿地店（江北区绿地缤纷城1号楼4楼，0574-87214863），欢迎电话或在线预约体验课。',
                 'faqEyebrow' => 'FAQ · 到店前常见问题',
                 'faqTitle' => '把不确定先放下，我们会帮你确认适合的开始方式。',
             ],
@@ -536,12 +599,23 @@ function yimai_site_data(bool $with_db = true): array
                 'area' => '600㎡',
                 'address' => '宁波市鄞州区杉杉国贸天地D幢2楼',
                 'phone' => '0574-87567277',
+                // GEO / 邮编 / 营业时间：LocalBusiness Schema 用值，全部【待门店确认】。
+                // 经纬度先按商圈公开点位填（误差可接受），营业时间留空——
+                // 宁可不出 openingHoursSpecification，也不声明一个没核对过的时间让人白跑。
+                'latitude' => '29.817650',   // 待门店确认
+                'longitude' => '121.571240', // 待门店确认
+                'postalCode' => '315100',    // 待门店确认（鄞州区）
+                'openingHours' => '',        // 待门店确认（如 Mo-Su 09:00-21:30）
             ],
             [
                 'name' => '绿地店',
                 'area' => '500㎡',
                 'address' => '宁波市江北区绿地缤纷城1号楼4楼',
                 'phone' => '0574-87214863',
+                'latitude' => '29.891930',   // 待门店确认
+                'longitude' => '121.553710', // 待门店确认
+                'postalCode' => '315020',    // 待门店确认（江北区）
+                'openingHours' => '',        // 待门店确认
             ],
         ],
         'memberships' => [

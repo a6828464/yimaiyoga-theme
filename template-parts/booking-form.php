@@ -29,6 +29,26 @@ $interestOptions = is_array($interestOptions) ? array_values(array_filter(array_
 if ($interestOptions === []) {
     $interestOptions = ['精品团课', '私教小班', '定制私教', '体态评估', 'RYT200教培'];
 }
+
+// 课程卡「约这节课」带来的 ?interest=<课程主题>：只有命中白名单才预选，避免脏参数被当成选项。
+// 白名单 = 配置里的 booking.interests + courseThemes 标题（课程卡就是拿标题当参数的）。
+$interestAllowed = $interestOptions;
+foreach ((array) (yimai_config()['courseThemes'] ?? []) as $courseTheme) {
+    $themeTitle = is_array($courseTheme) ? trim((string) ($courseTheme['title'] ?? '')) : '';
+    if ($themeTitle !== '') {
+        $interestAllowed[] = $themeTitle;
+    }
+}
+$interestPreset = isset($_GET['interest']) && is_string($_GET['interest'])
+    ? mb_substr(trim(sanitize_text_field(wp_unslash($_GET['interest']))), 0, 40)
+    : '';
+if ($interestPreset !== '' && in_array($interestPreset, $interestAllowed, true)) {
+    if (!in_array($interestPreset, $interestOptions, true)) {
+        array_unshift($interestOptions, $interestPreset); // 课程主题不在下拉里时补一项
+    }
+} else {
+    $interestPreset = ''; // 不命中白名单就忽略，保持默认选中
+}
 ?>
 <form class="booking-form" data-booking-form method="post" action="<?php echo esc_url(admin_url('admin-ajax.php')); ?>">
   <input type="hidden" name="action" value="yimai_booking">
@@ -52,7 +72,7 @@ if ($interestOptions === []) {
     <select id="booking-interest" name="interest" required>
       <option value="">体验方向</option>
       <?php foreach ($interestOptions as $interest): ?>
-        <option value="<?php echo esc_attr($interest); ?>"><?php echo esc_html($interest); ?></option>
+        <option value="<?php echo esc_attr($interest); ?>"<?php echo $interestPreset === $interest ? ' selected' : ''; ?>><?php echo esc_html($interest); ?></option>
       <?php endforeach; ?>
     </select>
   </div>

@@ -20,6 +20,15 @@ $images   = $config['images'] ?? [];
     <h1><?php echo nl2br(esc_html($copy['heroTitle'] ?? '')); ?></h1>
     <p><?php echo esc_html($copy['heroDescription'] ?? ''); ?></p>
     <span><?php echo esc_html($copy['heroNote'] ?? ''); ?></span>
+    <?php // 首屏转化入口：文案全部来自 copy.home，模板里不写死中文 ?>
+    <div class="hero-actions">
+      <?php if (($copy['ctaPrimary'] ?? '') !== ''): ?>
+        <a class="button primary" href="<?php echo esc_url(home_url('/booking')); ?>"><?php echo esc_html($copy['ctaPrimary']); ?></a>
+      <?php endif; ?>
+      <?php if (($copy['ctaSecondary'] ?? '') !== ''): ?>
+        <a class="text-link light" href="<?php echo esc_url(home_url('/classes')); ?>"><?php echo esc_html($copy['ctaSecondary']); ?></a>
+      <?php endif; ?>
+    </div>
   </div>
 </section>
 
@@ -37,13 +46,14 @@ $images   = $config['images'] ?? [];
   </div>
   <div class="card-grid three">
     <?php foreach ($courses as $course): ?>
-      <article class="course-card reveal">
+      <?php // 整卡可点：<a> 直接承担卡片容器（卡内无其它链接，不会出现 <a> 嵌 <a>） ?>
+      <a class="course-card reveal" href="<?php echo esc_url(home_url('/classes')); ?>">
         <div class="image-frame"><img src="<?php echo esc_url(yimai_image_url($course['image'] ?? '')); ?>" alt="<?php echo esc_attr($course['title'] ?? ''); ?>" loading="lazy"></div>
         <p class="eyebrow"><?php echo esc_html($course['type'] ?? ''); ?></p>
         <h3><?php echo esc_html($course['title'] ?? ''); ?></h3>
         <p><?php echo esc_html($course['effect'] ?? ''); ?></p>
         <small><?php echo esc_html($course['suited'] ?? ''); ?></small>
-      </article>
+      </a>
     <?php endforeach; ?>
   </div>
 </section>

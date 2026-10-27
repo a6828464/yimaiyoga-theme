@@ -21,6 +21,8 @@ $favicon     = $site['favicon'] ?? '';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <?php // meta description / keywords 由 functions.php 的 wp_head 钩子统一输出，此处不再重复。 ?>
 <?php if ($favicon): ?><link rel="icon" href="<?php echo esc_url(yimai_image_url($favicon)); ?>"><?php endif; ?>
+<?php // 图床域名预热：图片走 image.shunan.fun，提前建连省掉首个图片请求的 DNS+TLS 往返 ?>
+<link rel="preconnect" href="https://image.shunan.fun" crossorigin>
 <?php wp_head(); ?>
 <noscript><style>.reveal{opacity:1;transform:none}</style></noscript>
 </head>
@@ -30,7 +32,7 @@ $favicon     = $site['favicon'] ?? '';
   <nav class="nav-shell">
     <a class="brand" href="<?php echo esc_url(home_url('/')); ?>">
       <?php if (!empty($site['logo'])): ?>
-        <img class="brand-logo" src="<?php echo esc_url(yimai_image_url($site['logo'])); ?>" alt="<?php echo esc_attr($site['brand'] ?? 'YI MAI'); ?>" style="height:<?php echo esc_attr((int) ($site['logoHeight'] ?? 13)); ?>px" loading="lazy">
+        <img class="brand-logo" src="<?php echo esc_url(yimai_image_url($site['logo'])); ?>" alt="<?php echo esc_attr($site['brand'] ?? 'YI MAI'); ?>" style="height:<?php echo esc_attr((int) ($site['logoHeight'] ?? 13)); ?>px">
       <?php else: ?>
         <?php echo esc_html($site['brand'] ?? 'YI MAI'); ?>
       <?php endif; ?>

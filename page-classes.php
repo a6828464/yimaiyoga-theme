@@ -30,6 +30,8 @@ $copy   = $config['copy']['classes'] ?? [];
       <h3><?php echo esc_html($course['title'] ?? ''); ?></h3>
       <p><?php echo esc_html($course['effect'] ?? ''); ?></p>
       <small><?php echo esc_html($course['suited'] ?? ''); ?></small>
+      <?php // 每张卡直达预约表单，并把课程主题带进 ?interest= 供表单预选 ?>
+      <a class="button secondary course-card-cta" href="<?php echo esc_url(add_query_arg('interest', (string) ($course['title'] ?? ''), home_url('/booking'))); ?>"><?php echo esc_html($copy['cardCta'] ?? '约这节课'); ?></a>
     </article>
   <?php endforeach; ?>
 </section>

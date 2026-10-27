@@ -165,12 +165,43 @@
   }
 
   /* ================= 字段同步 ================= */
+  /* 门店的经纬度 / 邮编 / 营业时间做格式校验：不合法就清空并标红，存进去的值一定可用
+     （前端清空 → 主题输出时整段省略，不会拿半截数据去生成 LocalBusiness）。 */
+  var STUDIO_RULES={
+    latitude:{test:function(v){return /^-?\d{1,3}(\.\d+)?$/.test(v)&&Math.abs(parseFloat(v))<=90},hint:'纬度应为 -90~90 的数字'},
+    longitude:{test:function(v){return /^-?\d{1,3}(\.\d+)?$/.test(v)&&Math.abs(parseFloat(v))<=180},hint:'经度应为 -180~180 的数字'},
+    postalCode:{test:function(v){return /^\d{6}$/.test(v)},hint:'邮编应为 6 位数字'},
+    openingHours:{test:function(v){return v.split(',').every(function(seg){
+      return /^\s*([A-Za-z]{2})(\s*-\s*[A-Za-z]{2})?\s+([01]?\d|2[0-3]):[0-5]\d\s*-\s*([01]?\d|2[0-3]):[0-5]\d\s*$/.test(seg);
+    })},hint:'格式如 Mo-Su 09:00-21:30（可逗号分段，留空即不声明营业时间）'}
+  };
+  function studioFieldName(path){
+    var p=String(path).split('.');
+    if(p[0]!=='studios'||!p[2]){return ''}
+    return STUDIO_RULES[p[2]]?p[2]:'';
+  }
+  function checkStudioField(field){
+    var name=studioFieldName(field.getAttribute('data-path'));
+    if(!name){return true}
+    var rule=STUDIO_RULES[name];
+    var raw=String(field.value).trim();
+    var ok=raw===''||rule.test(raw); // 四项都允许留空（留空即不声明），只有填错才标红
+    field.classList.toggle('invalid',!ok);
+    field.setAttribute('title',ok?'':rule.hint);
+    return ok;
+  }
   function syncField(field){
     var path=field.getAttribute('data-path');
     if(!path||path==='__root__'){return}
     var value=field.value;
     if(field.getAttribute('type')==='checkbox'){value=field.checked}
     if(field.hasAttribute('data-array-lines')){value=value.split('\n').map(function(i){return i.trim()}).filter(Boolean)}
+    var studioName=studioFieldName(path);
+    if(studioName){
+      value=String(value).trim();
+      /* 留空合法（= 不声明）；填错则置空，绝不把半截坐标/错时间写进配置 */
+      if(value!==''&&!STUDIO_RULES[studioName].test(value)){value=''}
+    }
     setPath(path,value);
     var p=path.split('.');
     if(p[0]==='site'||p[0]==='images'){updatePreview(path)}
@@ -183,7 +214,7 @@
 
   /* ================= 列表编辑器（增删改） ================= */
   var SCHEMAS={
-    studios:{fields:[['name','门店名称','text'],['area','面积','text'],['address','地址','text'],['phone','电话','text']]},
+    studios:{fields:[['name','门店名称','text'],['area','面积','text'],['address','地址','text'],['phone','电话','text'],['latitude','纬度（29.8 左右，待门店确认）','text',{inputmode:'decimal'}],['longitude','经度（121.5 左右，待门店确认）','text',{inputmode:'decimal'}],['postalCode','邮编（6 位）','text',{maxlength:'6'}],['openingHours','营业时间（如 Mo-Su 09:00-21:30，留空即不声明）','text']]},
     memberships:{fields:[['name','方案名称','text'],['label','副标题','text'],['feature','特点说明','textarea'],['accent','标签','text']]},
     courseThemes:{fields:[['title','主题名称','text'],['type','类型','text'],['effect','功效','textarea'],['suited','适合人群','textarea'],['image','课程图片','image']]},
     classPaths:{fields:[['title','路径名称','text'],['description','说明','textarea']]},
@@ -229,7 +260,14 @@
         if(key==='faqs'){path=base+'.'+idx+'.'+(f[0]==='q'?'0':'1');v=item[f[0]==='q'?0:1]}
         if(f[2]==='image'){html+=imageBlockHtml(path,v)}
         else if(f[2]==='textarea'){html+=fieldHtml(path,f[1],'textarea',v,'rows="3"')}
-        else{html+=fieldHtml(path,f[1],f[2]||'text',v)}
+        else{
+          var extra=f[3]||{};
+          var attr='';
+          if(extra.inputmode){attr+=' inputmode="'+extra.inputmode+'"'}
+          if(extra.maxlength){attr+=' maxlength="'+extra.maxlength+'"'}
+          if(extra.placeholder){attr+=' placeholder="'+esc(extra.placeholder)+'"'}
+          html+=fieldHtml(path,f[1],f[2]||'text',v,attr);
+        }
       });
       html+='</div>';
       // tags 编辑器
@@ -287,7 +325,7 @@
     });
     // 字段输入即时同步到 config
     host.querySelectorAll('[data-path]').forEach(function(f){
-      f.addEventListener('input',function(){try{syncField(f)}catch(e){msg(e.message)}});
+      f.addEventListener('input',function(){try{checkStudioField(f);syncField(f)}catch(e){msg(e.message)}});
       if(f.getAttribute('type')==='checkbox'){f.addEventListener('change',function(){try{syncField(f)}catch(e){msg(e.message)}})}
     });
   }
@@ -317,7 +355,7 @@
   /* ================= 普通字段即时同步 ================= */
   root.querySelectorAll('[data-path]').forEach(function(field){
     if(field.getAttribute('data-path')==='__root__'){return}
-    field.addEventListener('input',function(){try{syncField(field)}catch(e){msg(e.message)}});
+    field.addEventListener('input',function(){try{checkStudioField(field);syncField(field)}catch(e){msg(e.message)}});
     if(field.getAttribute('type')==='checkbox'){field.addEventListener('change',function(){try{syncField(field)}catch(e){msg(e.message)}})}
   });
 
