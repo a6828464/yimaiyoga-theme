@@ -15,6 +15,11 @@ $images   = $config['images'] ?? [];
 // 门店直达入口（studio-feature 区块）：只收「门店页真的存在」的门店，
 // 锚文本自带 店名 + 区 + 商圈；一个都没有时整块不渲染（不留 404，见 yimai_home_studio_links）。
 $homeStudioLinks = yimai_home_studio_links();
+// 最新文章（预约区块之上）：取最近 3 篇；列表为空时整块不渲染（不留空分区）
+$latestPosts = yimai_latest_posts(3);
+$latestEyebrow = trim((string) ($copy['latestEyebrow'] ?? ''));
+$latestTitle   = trim((string) ($copy['latestTitle'] ?? ''));
+$latestCta     = trim((string) ($copy['latestCta'] ?? ''));
 // 首页实体文案（hero 之后）：三个扁平键都在 copy.home（后台「页面文案」可改，模板不写死中文）。
 // 正文段落用空行分隔——后台每个键是一个 textarea，模板按空行拆段，避免嵌套数组。
 $homeIntroEyebrow = trim((string) ($copy['homeIntroEyebrow'] ?? ''));
@@ -158,6 +163,36 @@ foreach (preg_split('/\R{2,}/u', (string) ($copy['homeIntroBody'] ?? '')) ?: [] 
     <a class="text-link light" href="<?php echo esc_url(home_url('/studio')); ?>">探索空间</a>
   </div>
 </section>
+
+<?php if ($latestPosts !== []): ?>
+<section class="page-block latest-posts reveal">
+  <div class="latest-head">
+    <div>
+      <?php if ($latestEyebrow !== ''): ?>
+        <p class="eyebrow"><?php echo esc_html($latestEyebrow); ?></p>
+      <?php endif; ?>
+      <?php if ($latestTitle !== ''): ?>
+        <h2><?php echo esc_html($latestTitle); ?></h2>
+      <?php endif; ?>
+    </div>
+    <?php if ($latestCta !== ''): ?>
+      <a class="text-link" href="<?php echo esc_url(home_url('/blog')); ?>"><?php echo esc_html($latestCta); ?></a>
+    <?php endif; ?>
+  </div>
+  <div class="latest-grid">
+    <?php foreach ($latestPosts as $article): ?>
+      <a class="latest-card" href="<?php echo esc_url($article['url']); ?>">
+        <img src="<?php echo esc_url($article['image']); ?>" alt="<?php echo esc_attr($article['alt']); ?>" loading="lazy"<?php if ($article['image_width'] > 0 && $article['image_height'] > 0): ?> width="<?php echo esc_attr((string) $article['image_width']); ?>" height="<?php echo esc_attr((string) $article['image_height']); ?>"<?php endif; ?>>
+        <time datetime="<?php echo esc_attr($article['date_iso']); ?>"><?php echo esc_html($article['date']); ?></time>
+        <h3><?php echo esc_html($article['title']); ?></h3>
+        <?php if ($article['excerpt'] !== ''): ?>
+          <p><?php echo esc_html($article['excerpt']); ?></p>
+        <?php endif; ?>
+      </a>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
 <section class="booking-section">
   <div class="section-intro reveal">

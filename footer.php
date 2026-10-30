@@ -24,12 +24,6 @@ $icpNumber = $site['icpNumber'] ?? '';
       <p class="footer-slogan">看见·包容·超越</p>
       <p>通过瑜伽与普拉提，让都市女性面对自我，对话身体和心灵，在一麦遇见更好的自己。</p>
     </div>
-    <div class="footer-links">
-      <a href="<?php echo esc_url(home_url('/classes')); ?>">课程体系</a>
-      <a href="<?php echo esc_url(home_url('/membership')); ?>">会员方案</a>
-      <a href="<?php echo esc_url(home_url('/booking')); ?>">预约体验</a>
-      <a href="<?php echo esc_url(home_url('/studio')); ?>">空间与门店</a>
-    </div>
     <div class="footer-studios">
       <?php foreach (yimai_studios() as $studio): ?>
         <?php $telNumber = yimai_tel_number((string) ($studio['phone'] ?? '')); ?>
@@ -51,6 +45,21 @@ $icpNumber = $site['icpNumber'] ?? '';
       <p class="qr-note">扫码关注公众号，了解课程、活动与练习内容。</p>
     </div>
   </div>
+  <?php
+  /*
+   * 次级导航行（不在 .footer-grid 里）：栅格列宽各自为政时，「课程体系/会员方案/预约体验」
+   * 会落在第 2 列（1440 下 x≈532），与页首标签的左边线（x=48）错开。
+   * 挪成网格下方一行后，它与 .footer-grid / .hero-copy 共用 --page-max 容器，左边线对齐。
+   * 博客入口也补在这里——页脚原本没有到 /blog 的链接。
+   */
+  ?>
+  <nav class="footer-links" aria-label="页脚导航">
+    <a href="<?php echo esc_url(home_url('/classes')); ?>">课程体系</a>
+    <a href="<?php echo esc_url(home_url('/membership')); ?>">会员方案</a>
+    <a href="<?php echo esc_url(home_url('/booking')); ?>">预约体验</a>
+    <a href="<?php echo esc_url(home_url('/studio')); ?>">空间与门店</a>
+    <a href="<?php echo esc_url(home_url('/blog')); ?>">博客</a>
+  </nav>
   <?php if ($icpNumber): ?>
     <div class="icp"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer"><?php echo esc_html($icpNumber); ?></a></div>
   <?php endif; ?>

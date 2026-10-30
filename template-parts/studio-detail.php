@@ -30,6 +30,10 @@ $transit  = yimai_studio_page_transit($yimaiStudioKey);
 $courses  = yimai_studio_page_courses();
 $teachers = yimai_studio_page_teachers($studio);
 $faqs     = yimai_studio_page_faqs($studio, $entry, $transit);
+// 周课表（xlsx 一次性转成的静态数据）：过滤掉清洁日/内部训练后为空则整块不渲染
+$timetable = yimai_studio_timetable($yimaiStudioKey);
+// 周期只出现一次（表头只留周一…周日）：week 来自数据层，日期不重复渲染 7 次
+$ttWeek = trim((string) ($timetable['week'] ?? ''));
 
 $studioName  = trim((string) ($studio['name'] ?? ''));
 $siteName    = trim((string) ($config['site']['name'] ?? '一麦瑜伽'));
@@ -187,6 +191,89 @@ $eyebrow = implode(' · ', $eyebrowParts);
         <p><?php echo esc_html(implode(' · ', array_filter([(string) ($teacher['role'] ?? ''), (string) ($teacher['focus'] ?? '')], static fn (string $part): bool => $part !== ''))); ?></p>
       </a>
     <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
+
+<?php // 周课表：行=时间段，列=周一到周日；桌面整表，<=700px 横向滚动 + 首列吸附 ?>
+<?php if ($timetable['rows'] !== [] && $timetable['days'] !== []): ?>
+<section class="page-block tt-section reveal">
+  <div class="tt-head">
+    <div>
+      <p class="eyebrow">Timetable · 周课表</p>
+      <h2><?php echo esc_html($studioName . '周课表'); ?></h2>
+    </div>
+    <p class="tt-note"><?php echo esc_html(($ttWeek !== '' ? '课表适用于 ' . $ttWeek . '，' : '') . '实际排课以门店当周公告为准；每格为课程与授课老师，空格为无课。'); ?></p>
+  </div>
+  <?php // 手机上表格只在容器内横向滚动：给一句看得见的提示，别让人以为课表被裁掉了 ?>
+  <p class="tt-hint">左右滑动查看整周 →</p>
+  <div class="tt-scroll" role="region" tabindex="0" aria-label="<?php echo esc_attr($studioName . '周课表，可横向滚动'); ?>">
+    <table class="tt-table">
+      <caption class="sr-only"><?php echo esc_html($studioName . '课程安排' . ($ttWeek !== '' ? '（适用于 ' . $ttWeek . '）' : '') . '：每行是一个开始时间，每列是周一到周日'); ?></caption>
+      <thead>
+        <tr>
+          <th scope="col" class="tt-time">时间</th>
+          <?php foreach ($timetable['days'] as $dayLabel): ?>
+            <th scope="col"><?php echo esc_html($dayLabel); ?></th>
+          <?php endforeach; ?>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($timetable['rows'] as $ttRow): ?>
+          <?php
+          /*
+           * 行首的时间：源表里同一行的时段是统一的（都是 60 分钟），所以把「11:15–12:15」
+           * 放在行首，格子里不再重复时间，只留课程 / 老师 / 教室+难度三层。
+           */
+          $ttStart = (string) ($ttRow['start'] ?? '');
+          $ttRange = '';
+          foreach ($ttRow['slots'] as $ttSlot) {
+              if (is_array($ttSlot) && (string) ($ttSlot['time'] ?? '') !== '') {
+                  $ttRange = (string) $ttSlot['time'];
+                  break;
+              }
+          }
+          $ttEnd = str_contains($ttRange, '~') ? substr($ttRange, (int) strpos($ttRange, '~') + 1) : '';
+          ?>
+          <tr>
+            <th scope="row" class="tt-time">
+              <span class="tt-start"><?php echo esc_html($ttStart); ?></span>
+              <?php if ($ttEnd !== ''): ?><span class="tt-range">–<?php echo esc_html($ttEnd); ?></span><?php endif; ?>
+            </th>
+            <?php foreach ($timetable['days'] as $dayIndex => $dayLabel): ?>
+              <?php $ttSlot = $ttRow['slots'][$dayIndex] ?? null; ?>
+              <?php if (!is_array($ttSlot)): ?>
+                <td class="tt-empty" aria-label="无课">—</td>
+              <?php else: ?>
+                <td class="tt-cell">
+                  <?php
+                  /*
+                   * 课程名拆两段：主干 + 后缀（如「站立平衡」＋「-根基与控制」）。
+                   * 桌面显示完整名；<=700px 只显示主干（后缀藏在 .tt-name-extra），
+                   * 全名同时挂在 .tt-course 的 title 与 aria-label 上，长按/读屏都还能拿到。
+                   */
+                  $ttCourseFull = (string) $ttSlot['course'];
+                  $ttCourseTrunk = (string) ($ttSlot['trunk'] ?? $ttCourseFull);
+                  $ttCourseExtra = (string) ($ttSlot['extra'] ?? '');
+                  ?>
+                  <span class="tt-course" title="<?php echo esc_attr($ttCourseFull); ?>" aria-label="<?php echo esc_attr($ttCourseFull); ?>"><span class="tt-dot <?php echo esc_attr((string) ($ttSlot['dot'] ?? 'tt-dot--f')); ?>" aria-hidden="true"></span><span class="tt-name"><?php echo esc_html($ttCourseTrunk); ?><?php if ($ttCourseExtra !== ''): ?><span class="tt-name-extra"><?php echo esc_html($ttCourseExtra); ?></span><?php endif; ?></span><?php if (($ttSlot['tag'] ?? '') !== ''): ?><span class="tt-tag"><?php echo esc_html((string) $ttSlot['tag']); ?></span><?php endif; ?></span>
+                  <?php if (($ttSlot['teacher'] ?? '') !== ''): ?>
+                    <span class="tt-teacher"><?php echo esc_html((string) $ttSlot['teacher']); ?></span>
+                  <?php endif; ?>
+                  <?php
+                  $ttRating = (int) ($ttSlot['rating'] ?? 0);
+                  $ttMeta = trim((string) ($ttSlot['room'] ?? '') . ($ttRating > 0 ? ' · ' . str_repeat('★', $ttRating) : ''));
+                  ?>
+                  <?php if ($ttMeta !== ''): ?>
+                    <span class="tt-meta" title="<?php echo esc_attr('难度 ' . $ttRating . '/5'); ?>"><?php echo esc_html($ttMeta); ?></span>
+                  <?php endif; ?>
+                </td>
+              <?php endif; ?>
+            <?php endforeach; ?>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
   </div>
 </section>
 <?php endif; ?>

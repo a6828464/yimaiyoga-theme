@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.10.1');
+define('YIMAI_VERSION', '1.10.2');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
@@ -19,6 +19,8 @@ require_once YIMAI_THEME_DIR . '/inc/imgbed.php';
 // 门店详情页（一店一页 /studio/east · /studio/greenland）的数据层：
 // 注册表、H1、FAQ、到店路线，前台模板与 Schema 共用同一份。
 require_once YIMAI_THEME_DIR . '/inc/studio-pages.php';
+// 两店周课表（xlsx 一次性转成的静态数据 + 归一化/过滤口径）：运行时不读 xlsx。
+require_once YIMAI_THEME_DIR . '/inc/studio-timetables.php';
 
 /* -------------------------------------------------------------------------
  * 主题支持
@@ -578,6 +580,111 @@ function yimai_image_url(?string $path): string
         return $path;
     }
     return yimai_local_image_url($path);
+}
+
+/* -------------------------------------------------------------------------
+ * 首页「最新文章」（预约区块之上）：卡片数据
+ * ---------------------------------------------------------------------- */
+
+/**
+ * 卡片摘要：GSO 生成的 SEO 摘要 → 手写摘要 → 正文，按「字符」截断。
+ * 不用 wp_trim_words：它按空格数词，中文整段没有空格会被当成 1 个词，截不住长度。
+ */
+function yimai_post_card_excerpt(int $postId, int $limit = 46): string
+{
+    $text = trim((string) get_post_meta($postId, 'yimai_gso_excerpt', true));
+    if ($text === '') {
+        $text = trim((string) get_the_excerpt($postId));
+    }
+    if ($text === '') {
+        $post = get_post($postId);
+        $text = $post instanceof WP_Post ? (string) $post->post_content : '';
+    }
+    $text = trim((string) preg_replace('/\s+/u', ' ', wp_strip_all_tags($text)));
+    if ($text === '') {
+        return '';
+    }
+    return mb_strlen($text) > $limit ? mb_substr($text, 0, $limit) . '…' : $text;
+}
+
+/**
+ * 卡片图片：特色图 → 正文第一张图 → 主题占位图（占位图的 viewBox 就是 1200×900）。
+ * 正文图只有在能解析回附件时才拿得到真实宽高；拿不到就统一退回占位图——
+ * 宁可一组卡片都用占位，也不让某一张用没声明的尺寸把卡片高度带歪。
+ *
+ * @return array{url:string,width:int,height:int}
+ */
+function yimai_post_card_image(int $postId): array
+{
+    $placeholder = ['url' => yimai_image_url(''), 'width' => 1200, 'height' => 900];
+
+    $thumbId = (int) get_post_thumbnail_id($postId);
+    if ($thumbId > 0) {
+        $size = wp_get_attachment_image_src($thumbId, 'medium_large');
+        if (is_array($size) && !empty($size[0])) {
+            return ['url' => (string) $size[0], 'width' => (int) ($size[1] ?? 0), 'height' => (int) ($size[2] ?? 0)];
+        }
+    }
+
+    $post = get_post($postId);
+    $content = $post instanceof WP_Post ? (string) $post->post_content : '';
+    if ($content !== '' && preg_match('/<img[^>]+src=["\']([^"\']+)["\']/i', $content, $matches)) {
+        $attachmentId = function_exists('attachment_url_to_postid') ? (int) attachment_url_to_postid((string) $matches[1]) : 0;
+        if ($attachmentId > 0) {
+            $size = wp_get_attachment_image_src($attachmentId, 'medium_large');
+            if (is_array($size) && !empty($size[0])) {
+                return ['url' => (string) $size[0], 'width' => (int) ($size[1] ?? 0), 'height' => (int) ($size[2] ?? 0)];
+            }
+        }
+    }
+    return $placeholder;
+}
+
+/**
+ * 首页最新文章（默认 3 篇）：返回渲染所需的扁平字段，模板里不再碰 WP 循环。
+ * 置顶文章不插队（ignore_sticky_posts），首页要的是「最近发布」而不是编辑排序。
+ *
+ * @return array<int, array{id:int,title:string,url:string,excerpt:string,date:string,date_iso:string,image:string,image_width:int,image_height:int,alt:string}>
+ */
+function yimai_latest_posts(int $limit = 3): array
+{
+    $items = [];
+    if (!class_exists('WP_Query')) {
+        return $items;
+    }
+    $query = new WP_Query([
+        'post_type'           => 'post',
+        'post_status'         => 'publish',
+        'posts_per_page'      => max(1, $limit),
+        'ignore_sticky_posts' => true,
+        'no_found_rows'       => true, // 首页不分页，省掉一次 COUNT(*)
+    ]);
+    if (!$query->have_posts()) {
+        return $items;
+    }
+    while ($query->have_posts()) {
+        $query->the_post();
+        $postId = (int) get_the_ID();
+        if ($postId <= 0) {
+            continue;
+        }
+        $title = trim(wp_strip_all_tags((string) get_the_title($postId)));
+        $image = yimai_post_card_image($postId);
+        $items[] = [
+            'id'           => $postId,
+            'title'        => $title,
+            'url'          => (string) get_permalink($postId),
+            'excerpt'      => yimai_post_card_excerpt($postId),
+            'date'         => (string) get_the_date('Y年n月j日', $postId),
+            'date_iso'     => (string) get_the_date('c', $postId),
+            'image'        => $image['url'],
+            'image_width'  => $image['width'],
+            'image_height' => $image['height'],
+            'alt'          => $title,
+        ];
+    }
+    wp_reset_postdata();
+    return $items;
 }
 
 /* -------------------------------------------------------------------------
