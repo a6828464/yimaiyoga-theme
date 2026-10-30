@@ -10,12 +10,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('YIMAI_VERSION', '1.9.3');
+define('YIMAI_VERSION', '1.10.0');
 define('YIMAI_THEME_DIR', get_template_directory());
 define('YIMAI_THEME_URI', get_template_directory_uri());
 
 require_once YIMAI_THEME_DIR . '/inc/site-data.php';
 require_once YIMAI_THEME_DIR . '/inc/imgbed.php';
+// 门店详情页（一店一页 /studio/east · /studio/greenland）的数据层：
+// 注册表、H1、FAQ、到店路线，前台模板与 Schema 共用同一份。
+require_once YIMAI_THEME_DIR . '/inc/studio-pages.php';
 
 /* -------------------------------------------------------------------------
  * 主题支持
@@ -135,11 +138,21 @@ function yimai_document_title_parts(array $parts): array
         $parts['title'] = $siteTitle;
         return $parts;
     }
-    // 子页面：页面名 | 网站名。标题为空时只出品牌，避免生成以分隔符开头的「| 品牌」
+    // 子页面：优先用 GSO 生成的 SEO 标题（yimai_gso_seo_title），没有才用页面标题。
+    // 拼成「标题 | 品牌」后超过 30 个字就只输出标题：搜索引擎按字符数截断，
+    // 超长时品牌名会被切掉一半，反而不如留一个完整的标题。
     $configName = trim((string) ($config['site']['name'] ?? ''));
     $brand = $configName !== '' ? $configName : $siteTitle;
-    $pageTitle = trim((string) ($parts['title'] ?? ''));
-    $parts['title'] = $pageTitle === '' ? $brand : $pageTitle . ' | ' . $brand;
+    // 只有真正的一篇内容/页面才有 post meta；归档页取到的 get_the_ID() 是循环里的第一篇文章，不能读
+    $postId = is_singular() ? (int) get_the_ID() : 0;
+    $aiTitle = $postId > 0 ? trim((string) get_post_meta($postId, 'yimai_gso_seo_title', true)) : '';
+    $pageTitle = $aiTitle !== '' ? $aiTitle : trim((string) ($parts['title'] ?? ''));
+    if ($pageTitle === '') {
+        $parts['title'] = $brand;
+        return $parts;
+    }
+    $combined = $pageTitle . ' | ' . $brand;
+    $parts['title'] = mb_strlen($combined) > 30 ? $pageTitle : $combined;
     return $parts;
 }
 add_filter('document_title_parts', 'yimai_document_title_parts', 20);
@@ -178,12 +191,23 @@ function yimai_meta_description(): void
     if (!is_singular()) {
         global $wp;
         $path = isset($wp->request) ? trim((string) $wp->request, '/') : '';
-        $url = $path === '' ? home_url('/') : home_url('/' . $path . '/');
-        if (is_paged()) {
-            $paged = (int) get_query_var('paged');
-            if ($paged > 1) {
-                $url = $path === '' ? home_url('/page/' . $paged . '/') : home_url('/' . $path . '/page/' . $paged . '/');
+        // 分页页自引用：$wp->request 里已经包含 page/N（例如 blog/page/2），
+        // 必须先按正则取出「基路径 + 页码」再拼，否则第 2 页的 canonical 会指向第 1 页——
+        // 那样分页内容永远不会自己成为规范地址，等于把第 2 页之后从索引里抹掉。
+        if ($path !== '' && preg_match('#^(.+)/page/([0-9]+)$#', $path, $pageMatch)) {
+            $url = home_url('/' . $pageMatch[1] . '/page/' . $pageMatch[2] . '/');
+        } elseif ($path !== '') {
+            $url = home_url('/' . $path . '/');
+            // 基路径里不带 page/N，但查询确实是分页（如首页或归档的 ?paged=2）时沿用原逻辑
+            if (is_paged()) {
+                $paged = (int) get_query_var('paged');
+                if ($paged > 1) {
+                    $url = home_url('/' . $path . '/page/' . $paged . '/');
+                }
             }
+        } else {
+            $paged = is_paged() ? (int) get_query_var('paged') : 0;
+            $url = $paged > 1 ? home_url('/page/' . $paged . '/') : home_url('/');
         }
         echo "\n<link rel=\"canonical\" href=\"" . esc_url($url) . "\">";
     }
@@ -251,6 +275,21 @@ function yimai_meta_description(): void
                 . '</script>';
         }
     }
+    // 门店详情页（一店一页）：只输出「当前这家店」一个实体，@id 指向店内锚点。
+    // 首页两店的 @graph 与这里互斥（is_front_page 与门店页不会同时成立），不会重复声明。
+    $studioKey = yimai_current_studio_key();
+    if (yimai_theme_owns_local_schema() && $studioKey !== '') {
+        $studioData = yimai_studio_page_data($studioKey);
+        if ($studioData !== []) {
+            $shop = yimai_studio_schema($studioData['studio'], $site, (string) $studioData['entry']['slug']);
+            if ($shop !== null) {
+                $ld = ['@context' => 'https://schema.org'] + $shop;
+                echo "\n<script type=\"application/ld+json\">"
+                    . wp_json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+                    . '</script>';
+            }
+        }
+    }
 }
 add_action('wp_head', 'yimai_meta_description', 1);
 
@@ -283,10 +322,16 @@ function yimai_studio_geo_clean(array $studio): array
 }
 
 /**
- * 单家门店 → HealthAndBeautyBusiness 节点；没有合法 geo 时返回 null（调用方跳过该店）。
- * geo 从门店字段读，旧 DB 记录缺键时回落默认结构里同名门店的占位坐标。
+ * 单家门店 → HealthAndBeautyBusiness 节点。
+ *
+ * 两种用法，行为必须分开：
+ * - 首页两店（$slug 为空）：没有合法 geo 时返回 null，调用方跳过该店
+ *   —— 半截 LocalBusiness 会被 Rich Results 报错，比没有更糟；
+ * - 门店详情页（$slug 非空）：节点一定输出，geo 为空时省略 geo 字段
+ *   —— 那一页本身就是这家店的官方落地页，没有坐标也要有 @id / address / telephone，
+ *   少了坐标只损失地图增强，不会让整家店从结构化数据里消失。
  */
-function yimai_studio_schema(array $studio, array $site): ?array
+function yimai_studio_schema(array $studio, array $site, string $slug = ''): ?array
 {
     // 输出侧再校验一次：绕过后台 JS 直接写库的脏值（lat=200 / postalCode=abc）不会进 JSON-LD
     $studio = yimai_studio_geo_clean($studio);
@@ -298,7 +343,8 @@ function yimai_studio_schema(array $studio, array $site): ?array
         $lat = trim((string) ($fallback['latitude'] ?? ''));
         $lng = trim((string) ($fallback['longitude'] ?? ''));
     }
-    if (!is_numeric($lat) || !is_numeric($lng)) {
+    $hasGeo = is_numeric($lat) && is_numeric($lng);
+    if ($slug === '' && !$hasGeo) {
         return null;
     }
     $shop = [
@@ -312,12 +358,19 @@ function yimai_studio_schema(array $studio, array $site): ?array
             'addressLocality' => '宁波市',
             'addressCountry' => 'CN',
         ],
-        'geo' => [
+    ];
+    if ($slug !== '') {
+        // 门店页独立实体：@id 指到店内锚点，url 指到门店页，引用方可以稳定指向同一家店
+        $shop['@id'] = home_url('/studio/' . $slug . '#store');
+        $shop['url'] = home_url('/studio/' . $slug . '/');
+    }
+    if ($hasGeo) {
+        $shop['geo'] = [
             '@type' => 'GeoCoordinates',
             'latitude' => (float) $lat,
             'longitude' => (float) $lng,
-        ],
-    ];
+        ];
+    }
     $postalCode = trim((string) ($studio['postalCode'] ?? ($fallback['postalCode'] ?? '')));
     if ($postalCode !== '') {
         $shop['address']['postalCode'] = $postalCode;
@@ -355,17 +408,13 @@ if (yimai_theme_owns_local_schema()) {
 }
 
 /**
- * FAQPage 结构化数据：只在真正展示 FAQ 的页面输出（当前仅 /contact 的 .faq-panel），
- * 避免全站每页都声明同一组问答被搜索引擎判为重复标记。
- * 问答数据与前台展示同源（yimai_faqs），元组与 {q,a} 两种形状都兼容。
+ * FAQ 列表 → FAQPage 的 mainEntity 条目。
+ * 元组 ['问题','回答'] 与映射 {q,a} 两种形状都兼容（后台「新增」写的是后者）。
  */
-function yimai_faq_schema(): void
+function yimai_faq_items(array $faqs): array
 {
-    if (!is_page('contact')) {
-        return;
-    }
     $items = [];
-    foreach (yimai_faqs() as $faq) {
+    foreach ($faqs as $faq) {
         $faq = is_array($faq) ? $faq : [];
         $question = trim((string) ($faq[0] ?? ($faq['q'] ?? '')));
         $answer = trim((string) ($faq[1] ?? ($faq['a'] ?? '')));
@@ -377,6 +426,34 @@ function yimai_faq_schema(): void
             'name' => $question,
             'acceptedAnswer' => ['@type' => 'Answer', 'text' => $answer],
         ];
+    }
+    return $items;
+}
+
+/**
+ * FAQPage 结构化数据：只在真正展示 FAQ 的页面输出
+ * —— /contact 的 .faq-panel（全站 FAQ），以及门店详情页（该店 FAQ，与页面同源同顺序）。
+ * 其余页面不输出，避免全站每页都声明同一组问答被判为重复标记。
+ */
+function yimai_faq_schema(): void
+{
+    $items = [];
+    if (is_page('contact')) {
+        $items = yimai_faq_items(yimai_faqs());
+    } else {
+        $studioKey = yimai_current_studio_key();
+        if ($studioKey !== '') {
+            $studioData = yimai_studio_page_data($studioKey);
+            if ($studioData !== []) {
+                $items = yimai_faq_items(
+                    yimai_studio_page_faqs(
+                        $studioData['studio'],
+                        $studioData['entry'],
+                        yimai_studio_page_transit($studioKey)
+                    )
+                );
+            }
+        }
     }
     if ($items === []) {
         return;

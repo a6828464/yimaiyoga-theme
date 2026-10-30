@@ -88,7 +88,9 @@ $templates = [
     'header.php', 'footer.php', 'front-page.php', 'index.php', 'single.php', '404.php',
     'page-blog.php', 'page-booking.php', 'page-classes.php', 'page-contact.php',
     'page-instructors.php', 'page-membership.php', 'page-studio.php', 'page-training.php',
+    'page-east.php', 'page-greenland.php',
     'template-parts/booking-form.php', 'template-parts/studio-cards.php', 'template-parts/membership-rows.php',
+    'template-parts/studio-detail.php',
 ];
 
 /**

@@ -161,3 +161,36 @@
   .related-posts{padding:0 1.25rem 3.5rem}
   .hero-actions{margin-top:1.3rem}
 }
+/* ==== 门店详情页（一店一页 /studio/east · /studio/greenland） ==== */
+/* 地址 / 电话 / 营业时间这类事实条目：沿用 .contact-grid 的网格与分隔线，
+   只补正文行高与颜色（默认 p 没有行高规则，长地址会挤成一块） */
+.store-facts p{margin:0 0 .4rem;line-height:2;color:rgb(var(--color-ink-rgb)/.55)}
+.store-facts p:last-child{margin-bottom:0}
+/* 地图占位：坐标与门牌未确认前不放 iframe（假坐标比没有更糟），
+   先用虚线占位框 + 地址检索链接；YG 确认坐标后替换成高德嵌入，版式不变 */
+.store-map{display:flex;flex-direction:column;justify-content:center;gap:1rem;min-height:340px;padding:2.5rem;border:1px dashed rgb(var(--color-forest-rgb)/.3);background:var(--color-linen)}
+.store-map h2{margin:0;font-family:Georgia,serif;font-size:2rem;line-height:1.2;color:var(--color-forest)}
+.store-map p{margin:0;max-width:46ch;line-height:2;color:rgb(var(--color-ink-rgb)/.55)}
+
+/* ==== 首页实体文案（hero 之后）：沿用 .split-section 骨架，左标题 + 右正文 ==== */
+.home-intro-body{max-width:680px}
+.home-intro-body p{margin:0 0 1.4rem;line-height:2;color:rgb(var(--color-ink-rgb)/.6)}
+.home-intro-body p:last-child{margin-bottom:0}
+
+@media (max-width:700px){
+  .store-map{min-height:240px;padding:1.5rem}
+  .store-map h2{font-size:1.6rem}
+  .home-intro-body p{line-height:1.95}
+}
+
+/* 门店页师资用两列（每店 2-3 位老师，三列会空一格）；手机端退回单列。
+   放在文件末尾 + 自带 media 覆盖，避免被前面的 .card-grid.three 断点规则反压。 */
+.card-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:700px){.card-grid.two{grid-template-columns:1fr}}
+
+/* 门店页 H1：这一行必然比其它页标题长（城市+区+业务+店名），
+   字号比通用 .page-hero h1 降一档，落在 2 行内；「（店名）」整段不断行，
+   大字号下被切成「东部/店」是最难读的一种断法。 */
+.page-hero h1.store-h1{font-size:clamp(1.75rem,3.2vw,3.1rem);line-height:1.18;text-wrap:balance}
+.store-h1-name{display:inline-block;white-space:nowrap}
+@media (max-width:700px){.page-hero h1.store-h1{font-size:clamp(1.6rem,7vw,2.1rem);line-height:1.24}}

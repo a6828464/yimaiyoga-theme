@@ -23,6 +23,28 @@ if ($studioOptions === []) {
     $studioOptions = ['东部店', '绿地店'];
 }
 
+// 门店页 CTA 带来的 ?studio=<slug>（east / greenland）：命中门店注册表才预选。
+// 预选值仍然是「门店名」，提交字段名与后台处理逻辑都不变；也兼容直接传店名的旧链接。
+$studioPreset = '';
+$studioParam = isset($_GET['studio']) && is_string($_GET['studio'])
+    ? mb_substr(trim(sanitize_text_field(wp_unslash($_GET['studio']))), 0, 40)
+    : '';
+if ($studioParam !== '') {
+    foreach (yimai_studio_page_registry() as $studioEntry) {
+        if ($studioEntry['slug'] === $studioParam) {
+            $studioPreset = (string) $studioEntry['name'];
+            break;
+        }
+    }
+    if ($studioPreset === '' && in_array($studioParam, $studioOptions, true)) {
+        $studioPreset = $studioParam;
+    }
+    // 门店已从配置里删掉时不留一个选不中的预选值
+    if (!in_array($studioPreset, $studioOptions, true)) {
+        $studioPreset = '';
+    }
+}
+
 // 体验方向：优先读配置 booking.interests，未配置时回退到默认 5 项
 $interestOptions = $bookingConfig['interests'] ?? null;
 $interestOptions = is_array($interestOptions) ? array_values(array_filter(array_map('strval', $interestOptions), 'strlen')) : [];
@@ -65,7 +87,7 @@ if ($interestPreset !== '' && in_array($interestPreset, $interestAllowed, true))
     <select id="booking-studio" name="studio" required>
       <option value="">选择门店</option>
       <?php foreach ($studioOptions as $studioName): ?>
-        <option value="<?php echo esc_attr($studioName); ?>"><?php echo esc_html($studioName); ?></option>
+        <option value="<?php echo esc_attr($studioName); ?>"<?php echo $studioPreset === $studioName ? ' selected' : ''; ?>><?php echo esc_html($studioName); ?></option>
       <?php endforeach; ?>
     </select>
     <label class="sr-only" for="booking-interest">体验方向</label>

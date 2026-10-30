@@ -12,6 +12,17 @@ $copy     = $config['copy']['home'] ?? [];
 $courses  = array_slice($config['courseThemes'] ?? [], 0, 6);
 $teachers = array_slice($config['instructors'] ?? [], 0, 6);
 $images   = $config['images'] ?? [];
+// 首页实体文案（hero 之后）：三个扁平键都在 copy.home（后台「页面文案」可改，模板不写死中文）。
+// 正文段落用空行分隔——后台每个键是一个 textarea，模板按空行拆段，避免嵌套数组。
+$homeIntroEyebrow = trim((string) ($copy['homeIntroEyebrow'] ?? ''));
+$homeIntroTitle   = trim((string) ($copy['homeIntroTitle'] ?? ''));
+$introBody        = [];
+foreach (preg_split('/\R{2,}/u', (string) ($copy['homeIntroBody'] ?? '')) ?: [] as $introParagraph) {
+    $introParagraph = trim($introParagraph);
+    if ($introParagraph !== '') {
+        $introBody[] = $introParagraph;
+    }
+}
 ?>
 <section class="home-hero reveal">
   <img src="<?php echo esc_url(yimai_image_url($images['homeHero'] ?? '')); ?>" alt="一麦瑜伽空间" fetchpriority="high">
@@ -31,6 +42,20 @@ $images   = $config['images'] ?? [];
     </div>
   </div>
 </section>
+
+<?php if ($homeIntroTitle !== '' || $introBody !== []): ?>
+<section class="split-section reveal">
+  <div class="section-intro">
+    <p class="eyebrow"><?php echo esc_html($homeIntroEyebrow); ?></p>
+    <h2><?php echo esc_html($homeIntroTitle); ?></h2>
+  </div>
+  <div class="home-intro-body">
+    <?php foreach ($introBody as $introParagraph): ?>
+      <p><?php echo esc_html($introParagraph); ?></p>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
 <section class="statement reveal">
   <p class="eyebrow"><?php echo esc_html($copy['philosophyEyebrow'] ?? ''); ?></p>

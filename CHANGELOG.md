@@ -1,5 +1,25 @@
 # 更新日志
 
+## v1.10.0 · 2026-10-31
+
+> **须与 GSO 插件 ≥ 2.14.0 同批上线**（插件负责把 AI 标题/摘要写进 `yimai_gso_seo_title`、
+> `yimai_gso_excerpt`，本版开始读它们）。只升主题不升插件不会报错，只是拿不到 AI 标题。
+> 上线前还需要在后台建 `/studio` 下的两个子页面（slug 必须是 `east` / `greenland`，
+> 或跑 `php cli/create-studio-pages.php`）；两店门牌、经纬度、营业时间仍待门店确认。
+
+- **标题读取 AI 生成的 SEO 标题**：`yimai_document_title_parts()` 在单篇/页面分支先读 `yimai_gso_seo_title`，非空作为标题主体，空才回落页面标题；读 meta 加了 `is_singular()` 守卫（归档页的 `get_the_ID()` 是循环里的第一篇文章，不能读）。拼成「标题 | 品牌」超过 30 字时只输出标题——搜索引擎按字符数截断，超长时品牌名会被切掉一半，不如留一个完整标题
+- **修复分页页 canonical 全部指向第 1 页**：`$wp->request` 本身含 `page/N`（如 `blog/page/2`），旧代码把它再包一层成 `/blog/page/2/` 之外还在 `is_paged()` 时覆盖成基路径，第 2 页永远不是自己的规范地址——等于把第 2 页之后从索引里抹掉。现先按 `^(.+)/page/([0-9]+)$` 取出「基路径 + 页码」，命中即自引用；首页与 `?paged=` 分支保持原行为
+- **新增一店一页 `/studio/east`、`/studio/greenland`**（`page-east.php` / `page-greenland.php` → `template-parts/studio-detail.php`，数据层 `inc/studio-pages.php`）：
+  - H1 为「城市 + 区 + 业务 + 店名」（区从地址正则取、业务取本店导师 focus），`（店名）`整段不断行
+  - 正文 8 块：地址、可拨号电话（`tel:+86…`）、地铁/停车/到店动线、该店课程与教练（按 `instructors.role` 里的「东部店/绿地店」匹配）、营业时间、FAQ（3-5 条）、地图占位（地址检索链接，无 iframe 无假坐标）、预约 CTA（`/booking?studio=east`）
+  - 后台没有输入框的事实数据（门牌、坐标、营业时间、地铁停车、邮编）集中在 `inc/studio-pages.php` 并留空；**为空的块整块不渲染**，绝不编造
+- **门店 Schema**：`yimai_studio_schema()` 增加 `$slug` 参数——门店页输出单个 `HealthAndBeautyBusiness`，`@id = /studio/<slug>#store`、`url` 指向门店页，`geo` 为空则省略该字段（门店页本身就是这家店的官方落地页，没有坐标只损失地图增强，不该让整店从结构化数据里消失）；首页两店 `@graph` 的行为与坐标缺失时跳过整店的规则保持不变。FAQPage 从仅 `/contact` 扩到门店页，与页面 FAQ 同源同序
+- **首页 hero 之后新增实体文案段**：覆盖 宁波 / 鄞州 / 江北 / 器械普拉提 / 空中瑜伽 / 体态理疗 / 双店直营 / 免费预约体验，正文 4 段共 331 字。文案写在 `copy.home` 的 `homeIntroEyebrow` / `homeIntroTitle` / `homeIntroBody` 三个**扁平**字符串键里（后台「页面文案」把每个键渲染成一个 textarea，嵌套数组会被 `(string)` 成 `Array` 并写坏配置），段落用空行分隔，模板按空行拆段
+- **预约表单支持门店预选**：`?studio=east|greenland` 命中门店注册表才预选（白名单，选不中的值直接丢弃），提交字段名与后台处理逻辑不变，同时兼容直接传店名的旧链接
+- **首页门店卡增加「门店详情 →」站内入口**：页面还没建时 `yimai_studio_page_url_by_name()` 返回空串、链接不渲染，不留 404；一店一页没有站内链接就是孤岛页
+- **新增 `cli/create-studio-pages.php`**：幂等创建 `/studio` 下两个子页面并强制 slug 为 `east` / `greenland`（中文标题自动生成的 slug 是 URL 编码，不能直接用）
+- **新增 `docs/门店待确认数据清单.md`**：逐项列出两店门牌、经纬度、营业时间、地铁停车、邮编、教练名单，标注「需 YG 提供」，附上线前置与 curl 自检
+
 ## v1.9.3 · 2026-10-27
 
 > **发布顺序：先主题、后插件（回滚反向：先回主题、再回插件）。**
