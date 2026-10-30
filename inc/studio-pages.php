@@ -114,6 +114,54 @@ function yimai_studio_district(array $studio): string
 }
 
 /**
+ * 门店地址里的商圈 / 楼宇名：去掉城市、行政区与楼层尾巴。
+ * '宁波市鄞州区杉杉国贸天地D幢2楼' → '杉杉国贸天地'
+ * '宁波市江北区绿地缤纷城1号楼4楼' → '绿地缤纷城'
+ * 认不出楼宇写法时原样返回剩余部分（锚文本里「区 + 商圈」仍然成立）。
+ */
+function yimai_studio_landmark(array $studio): string
+{
+    $address = trim((string) ($studio['address'] ?? ''));
+    if ($address === '') {
+        return '';
+    }
+    $rest = (string) preg_replace('/^宁波市/u', '', $address);
+    $rest = (string) preg_replace('/^[\x{4e00}-\x{9fa5}]{2,3}区/u', '', $rest);
+    // 楼层写法：1号楼4楼 / D幢2楼 / 3座 等，从楼宇编号起整段截掉
+    $rest = (string) preg_replace('/\d+号楼.*$|[A-Za-z]幢.*$|\d+[幢栋座].*$/u', '', $rest);
+    $rest = trim($rest);
+    return $rest !== '' ? $rest : $address;
+}
+
+/**
+ * 首页门店直达入口：只返回「门店页确实存在」的门店。
+ * 每一项都自带 店名 + 区 + 商圈，锚文本因此天然含位置词，不需要另写「点击这里」。
+ * 页面没建时返回空数组 → 调用方整块不渲染（与 studio-cards 同一套 404 保护）。
+ *
+ * @return array<int, array{name:string, where:string, url:string}>
+ */
+function yimai_home_studio_links(): array
+{
+    $links = [];
+    foreach ((array) yimai_studios() as $studio) {
+        if (!is_array($studio)) {
+            continue;
+        }
+        $name = trim((string) ($studio['name'] ?? ''));
+        $url = yimai_studio_page_url_by_name($name);
+        if ($url === '') {
+            continue;
+        }
+        $links[] = [
+            'name'  => $name,
+            'where' => trim(yimai_studio_district($studio) . yimai_studio_landmark($studio)),
+            'url'   => $url,
+        ];
+    }
+    return $links;
+}
+
+/**
  * 门店页 H1：宁波 + 区 + 业务 + 店名 四要素齐全（同城位置词靠这一行吃）。
  * 例：宁波鄞州 · 器械普拉提与空中瑜伽（东部店）
  * 地址里取不到区时降级为「宁波 · 业务（店名）」，仍然保留城市、业务与店名。

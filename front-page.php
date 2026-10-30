@@ -12,6 +12,9 @@ $copy     = $config['copy']['home'] ?? [];
 $courses  = array_slice($config['courseThemes'] ?? [], 0, 6);
 $teachers = array_slice($config['instructors'] ?? [], 0, 6);
 $images   = $config['images'] ?? [];
+// 门店直达入口（studio-feature 区块）：只收「门店页真的存在」的门店，
+// 锚文本自带 店名 + 区 + 商圈；一个都没有时整块不渲染（不留 404，见 yimai_home_studio_links）。
+$homeStudioLinks = yimai_home_studio_links();
 // 首页实体文案（hero 之后）：三个扁平键都在 copy.home（后台「页面文案」可改，模板不写死中文）。
 // 正文段落用空行分隔——后台每个键是一个 textarea，模板按空行拆段，避免嵌套数组。
 $homeIntroEyebrow = trim((string) ($copy['homeIntroEyebrow'] ?? ''));
@@ -94,9 +97,26 @@ foreach (preg_split('/\R{2,}/u', (string) ($copy['homeIntroBody'] ?? '')) ?: [] 
 
 <section class="studio-feature reveal">
   <div>
-    <p class="eyebrow muted-light"><?php echo esc_html($copy['studioEyebrow'] ?? ''); ?></p>
-    <h2><?php echo esc_html($copy['studioTitle'] ?? ''); ?></h2>
-    <p><?php echo esc_html($copy['studioDescription'] ?? ''); ?></p>
+    <?php /* 内层 div 不参与样式：外层 .studio-feature>div 是 flex + space-between，
+             文案与门店入口分成上下两组，中间自然留白，不必新造版式 */ ?>
+    <div>
+      <p class="eyebrow muted-light"><?php echo esc_html($copy['studioEyebrow'] ?? ''); ?></p>
+      <h2><?php echo esc_html($copy['studioTitle'] ?? ''); ?></h2>
+      <p><?php echo esc_html($copy['studioDescription'] ?? ''); ?></p>
+    </div>
+    <?php if ($homeStudioLinks !== []): ?>
+      <?php // 同城转化最短路径：首页直接落到门店页，不用先绕 /studio。锚文本＝店名＋区＋商圈 ?>
+      <nav class="studio-links" aria-label="门店直达">
+        <?php foreach ($homeStudioLinks as $studioLink): ?>
+          <a class="studio-link" href="<?php echo esc_url($studioLink['url']); ?>">
+            <span class="studio-link-name"><?php echo esc_html($studioLink['name']); ?></span>
+            <?php if ($studioLink['where'] !== ''): ?>
+              <span class="studio-link-where"><?php echo esc_html($studioLink['where']); ?></span>
+            <?php endif; ?>
+          </a>
+        <?php endforeach; ?>
+      </nav>
+    <?php endif; ?>
   </div>
   <img src="<?php echo esc_url(yimai_image_url($images['homeStudio'] ?? $images['studioHero'] ?? '')); ?>" alt="一麦瑜伽空间氛围" loading="lazy">
 </section>

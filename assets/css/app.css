@@ -194,3 +194,16 @@
 .page-hero h1.store-h1{font-size:clamp(1.75rem,3.2vw,3.1rem);line-height:1.18;text-wrap:balance}
 .store-h1-name{display:inline-block;white-space:nowrap}
 @media (max-width:700px){.page-hero h1.store-h1{font-size:clamp(1.6rem,7vw,2.1rem);line-height:1.24}}
+
+/* ==== 首页「空间」区块（studio-feature）的门店直达入口 ====
+   沿用该区块现有的深色语汇：细上边线 + 衬线店名 + 小字商圈，不再单独造一套卡片。
+   桌面两列、手机堆叠；两行锚文本合起来就是「店名 + 区 + 商圈」，不需要「点击这里」。 */
+.studio-links{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:2.4rem}
+.studio-link{display:flex;flex-direction:column;gap:.35rem;border-top:1px solid rgb(251 250 246/.28);padding-top:.85rem;color:var(--color-pearl);transition:border-color .25s ease}
+.studio-link:hover{border-top-color:var(--color-clay)}
+.studio-link-name{font-family:Georgia,serif;font-size:1.35rem;line-height:1.2}
+.studio-link-where{font-size:.78rem;letter-spacing:.06em;color:rgb(251 250 246/.6)}
+@media (max-width:700px){
+  .studio-links{grid-template-columns:1fr;gap:.9rem;margin-top:1.8rem}
+  .studio-link-name{font-size:1.2rem}
+}
