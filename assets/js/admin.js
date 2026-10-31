@@ -605,6 +605,115 @@
     });
   }
 
+  /* ================= 门店课表（独立保存，整体提交 JSON） ================= */
+  var ttPanel = document.querySelector('[data-panel="timetables"]');
+  if (ttPanel) {
+    var ttStatus = ttPanel.querySelector('[data-tt-status]');
+    function ttMsg(t){ if (ttStatus) ttStatus.textContent = t || '' }
+    function ttDayCells(tr){ return tr.querySelectorAll('td[data-tt-day]') }
+    function ttBuildRow(card, row){
+      var tpl = card.querySelector('[data-tt-row-template]');
+      if (!tpl || !tpl.content || !tpl.content.firstElementChild) { return null }
+      var tr = tpl.content.firstElementChild.cloneNode(true);
+      var startEl = tr.querySelector('[data-tt-start]');
+      if (startEl) { startEl.value = (row && row.start) ? row.start : '' }
+      ttDayCells(tr).forEach(function(td, i){
+        var slot = (row && row.slots && row.slots[i]) ? row.slots[i] : null;
+        ['course','teacher','room','rating'].forEach(function(f){
+          var el = td.querySelector('[data-tt-field="' + f + '"]');
+          if (!el) { return }
+          el.value = (slot && slot[f] != null) ? String(slot[f]) : '';
+        });
+      });
+      return tr;
+    }
+    function ttRenderRows(card, rows){
+      var tbody = card.querySelector('[data-tt-rows]');
+      if (!tbody) { return }
+      tbody.innerHTML = '';
+      var list = (rows && rows.length) ? rows : [{start:'', slots:[]}];
+      list.forEach(function(row){
+        var tr = ttBuildRow(card, row);
+        if (tr) { tbody.appendChild(tr) }
+      });
+    }
+    /* 收集：课程为空 → null（老师/教室/星级一并丢弃，不提交脏格） */
+    function ttCollect(){
+      var out = {};
+      ttPanel.querySelectorAll('[data-tt-store]').forEach(function(card){
+        var key = card.getAttribute('data-tt-store');
+        var weekEl = card.querySelector('[data-tt-week]');
+        var rows = [];
+        card.querySelectorAll('[data-tt-rows] tr[data-tt-row]').forEach(function(tr){
+          var startEl = tr.querySelector('[data-tt-start]');
+          var slots = [];
+          ttDayCells(tr).forEach(function(td){
+            var val = function(f){
+              var el = td.querySelector('[data-tt-field="' + f + '"]');
+              return el ? String(el.value || '').trim() : '';
+            };
+            var course = val('course');
+            if (course === '') { slots.push(null); return }
+            var rating = parseInt(val('rating'), 10);
+            if (isNaN(rating)) { rating = 0 }
+            slots.push({course: course, teacher: val('teacher'), room: val('room'), rating: rating});
+          });
+          rows.push({start: startEl ? String(startEl.value || '').trim() : '', slots: slots});
+        });
+        out[key] = {week: weekEl ? String(weekEl.value || '').trim() : '', rows: rows};
+      });
+      return out;
+    }
+    ttPanel.addEventListener('click', function(e){
+      var addBtn = e.target.closest ? e.target.closest('[data-tt-add-row]') : null;
+      if (addBtn) {
+        var card = addBtn.closest('[data-tt-store]');
+        var tbody = card ? card.querySelector('[data-tt-rows]') : null;
+        var tr = card ? ttBuildRow(card, {start:'', slots:[]}) : null;
+        if (tbody && tr) { tbody.appendChild(tr); ttMsg('已加一行（点「保存门店课表」生效）') }
+        return;
+      }
+      var delBtn = e.target.closest ? e.target.closest('[data-tt-del-row]') : null;
+      if (delBtn) {
+        var rowEl = delBtn.closest('tr');
+        var body = rowEl ? rowEl.parentNode : null;
+        if (!body) { return }
+        var rowsNow = body.querySelectorAll('tr[data-tt-row]');
+        if (rowsNow.length <= 1) { ttMsg('至少留一行；想让这家店不显示课表，把课程清空再保存'); return }
+        rowEl.remove();
+        ttMsg('已删一行（点「保存门店课表」生效）');
+      }
+    });
+    var ttSaveBtn = ttPanel.querySelector('[data-tt-save]');
+    if (ttSaveBtn) {
+      ttSaveBtn.addEventListener('click', function(){
+        var payload = ttCollect();
+        var fd = new FormData();
+        fd.append('csrf_token', window.CSRF_TOKEN || '');
+        fd.append('timetables_json', JSON.stringify(payload));
+        ttMsg('保存中...');
+        fetch(endpoint('timetables'), {method:'POST', body: fd})
+          .then(function(res){ return res.json().then(function(d){ if (!res.ok) { throw d } return d }) })
+          .then(function(data){ ttMsg((data.message || '已保存') + ' ✓ 前台刷新即可见') })
+          .catch(function(error){ ttMsg((error && error.message) ? error.message : '保存失败') });
+      });
+    }
+    var ttDefaultBtn = ttPanel.querySelector('[data-tt-default-all]');
+    if (ttDefaultBtn) {
+      ttDefaultBtn.addEventListener('click', function(){
+        if (!confirm('把出厂课表载入编辑区？（会覆盖当前输入；仍需点「保存门店课表」才写库）')) { return }
+        ttPanel.querySelectorAll('[data-tt-store]').forEach(function(card){
+          var def = {};
+          try { def = JSON.parse(card.getAttribute('data-tt-default') || '{}') } catch (err) { def = {} }
+          var weekEl = card.querySelector('[data-tt-week]');
+          if (weekEl) { weekEl.value = def.week || '' }
+          ttRenderRows(card, def.rows || []);
+        });
+        ttMsg('已载入出厂课表，点「保存门店课表」写库');
+      });
+    }
+  }
+
   /* ================= Logo 大小滑块实时预览 ================= */
   var logoLive = root.querySelector('[data-logo-live]');
   var logoPath = config.site && config.site.logo ? config.site.logo : '';

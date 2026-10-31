@@ -5,7 +5,7 @@
  * 架构：旧的独立 /admin 入口（admin/index.php）保留不动作为兜底；
  * 这里把同一套后台挂进 wp-admin：
  * - 页面：add_menu_page 注册「一麦官网」，回调渲染 admin/views/dashboard.php
- * - 数据接口：admin-ajax.php（action=yimai_admin_api&op=save|upload|imgbed-sync|library|update-check|update-run）
+ * - 数据接口：admin-ajax.php（action=yimai_admin_api&op=save|save_timetables|upload|imgbed-sync|library|update-check|update-run）
  * - 认证：current_user_can('manage_options')；CSRF 用 wp_create_nonce('yimai_admin_api')
  *
  * @package yimaiyoga
@@ -90,6 +90,11 @@ add_action('wp_ajax_yimai_admin_api', function (): void {
             } catch (Throwable $error) {
                 json_response(['message' => '保存失败：' . $error->getMessage()], 500);
             }
+            // no break — json_response exits
+
+        case 'save_timetables':
+            // 门店课表：整体提交一份 JSON，校验通过才写库（见 yimai_timetables_handle_save）
+            yimai_timetables_handle_save((string) wp_unslash($_POST['timetables_json'] ?? ''));
             // no break — json_response exits
 
         case 'upload':

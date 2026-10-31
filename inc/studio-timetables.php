@@ -385,6 +385,139 @@ function yimai_timetable_dot_class(string $name): string
 }
 
 /**
+ * 星期标签归一：'周一10.26' / '周一' → '周一'；不足 7 个时补默认周一…周日。
+ *
+ * @return array<int, string>
+ */
+function yimai_timetable_day_labels(array $days): array
+{
+    $labels = [];
+    foreach ($days as $label) {
+        $label = trim((string) $label);
+        if ($label === '') {
+            continue;
+        }
+        $labels[] = preg_match('/^(周[一二三四五六日天])/u', $label, $m) ? $m[1] : $label;
+    }
+    $fallback = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return count($labels) === 7 ? $labels : $fallback;
+}
+
+/**
+ * 开始时间 → 时段字符串（源表全是 60 分钟课）：'11:15' → '11:15~12:15'。
+ * 后台只填开始时间，结束时间由这里算，避免两个框对不上。
+ */
+function yimai_timetable_slot_time(string $start): string
+{
+    $start = trim($start);
+    if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $start, $m)) {
+        return $start;
+    }
+    $start = sprintf('%02d:%02d', (int) $m[1], (int) $m[2]);
+    $endMinutes = ((int) $m[1]) * 60 + (int) $m[2] + 60;
+    $endMinutes %= 24 * 60;
+    return $start . '~' . sprintf('%02d:%02d', intdiv($endMinutes, 60), $endMinutes % 60);
+}
+
+/**
+ * 课表数据源：**后台配置优先，文件兜底**。
+ * 1) config['timetables'][$key]（后台「门店课表」保存的）结构合法且有行 → 用它；
+ * 2) 否则回落 inc/studio-timetables.php 里的默认数据（迁移基线，不再要求改文件）。
+ * 配置里是坏数据（类型不对/没有 rows）时同样回落，前台不会白屏。
+ */
+function yimai_timetable_source(string $key): array
+{
+    if (function_exists('yimai_config')) {
+        $saved = yimai_config()['timetables'][$key] ?? null;
+        // 有 rows 键就认（哪怕是空数组）：空表 = 该店有意不显示课表，不能再回落成旧默认，
+        // 否则「我把课表删空了，前台还挂着上一版」——这类「改了没生效」最难解释。
+        if (is_array($saved) && isset($saved['rows']) && is_array($saved['rows'])) {
+            return $saved;
+        }
+    }
+    $all = yimai_studio_timetables();
+    return (isset($all[$key]) && is_array($all[$key])) ? $all[$key] : [];
+}
+
+/**
+ * 后台保存前的结构清洗与校验（不写库，只返回结果）。
+ * 规则：周次任意文本；星期必须 7 个；每行 start 必须 HH:MM；每行必须 7 个格子；
+ * 格子 course 留空 → null（老师/教室/星级一并清空，不留只有老师的脏格）；
+ * 星级 0–5 越界夹紧；行数 0–40。
+ *
+ * @return array{ok:bool,message:string,timetables:array<string,array>}
+ */
+function yimai_timetable_sanitize_config(array $posted): array
+{
+    $known = ['studio-east', 'studio-greenland'];
+    $out = [];
+    foreach ($posted as $key => $store) {
+        if (!in_array((string) $key, $known, true)) {
+            continue; // 只认这两家店，别的键忽略
+        }
+        if (!is_array($store)) {
+            return ['ok' => false, 'message' => $key . ' 的结构不对（应为对象）', 'timetables' => []];
+        }
+        $rowsIn = $store['rows'] ?? [];
+        if (!is_array($rowsIn) || (array_is_list($rowsIn) === false)) {
+            return ['ok' => false, 'message' => $key . ' 的 rows 应为列表', 'timetables' => []];
+        }
+        if (count($rowsIn) > 40) {
+            return ['ok' => false, 'message' => $key . ' 的行数超过 40，先删掉多余时段', 'timetables' => []];
+        }
+        $rows = [];
+        foreach (array_values($rowsIn) as $i => $row) {
+            $rowNo = $i + 1;
+            if (!is_array($row)) {
+                return ['ok' => false, 'message' => $key . ' 第 ' . $rowNo . ' 行结构不对', 'timetables' => []];
+            }
+            $start = trim((string) ($row['start'] ?? ''));
+            if (!preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $start)) {
+                return ['ok' => false, 'message' => $key . ' 第 ' . $rowNo . ' 行开始时间应写成 HH:MM（如 09:00）', 'timetables' => []];
+            }
+            [$startHour, $startMinute] = array_map('intval', explode(':', $start));
+            $start = sprintf('%02d:%02d', $startHour, $startMinute);
+            $slotsIn = $row['slots'] ?? [];
+            if (!is_array($slotsIn) || count($slotsIn) !== 7) {
+                return ['ok' => false, 'message' => $key . ' 第 ' . $rowNo . ' 行应有 7 个格子（周一到周日）', 'timetables' => []];
+            }
+            $slots = [];
+            foreach (array_values($slotsIn) as $slot) {
+                if (!is_array($slot)) {
+                    $slots[] = null;
+                    continue;
+                }
+                $course = trim((string) ($slot['course'] ?? ''));
+                if ($course === '') {
+                    $slots[] = null; // 课程为空即无课：老师/教室/星级一并清掉
+                    continue;
+                }
+                $rating = $slot['rating'] ?? 0;
+                $rating = is_numeric($rating) ? (int) $rating : 0;
+                $slots[] = [
+                    'course'  => mb_substr($course, 0, 60),
+                    'teacher' => mb_substr(trim((string) ($slot['teacher'] ?? '')), 0, 30),
+                    'room'    => mb_substr(trim((string) ($slot['room'] ?? '')), 0, 30),
+                    'rating'  => max(0, min(5, $rating)),
+                ];
+            }
+            $rows[] = ['start' => $start, 'slots' => $slots];
+        }
+        $days = yimai_timetable_day_labels(is_array($store['days'] ?? null) ? $store['days'] : []);
+        $out[(string) $key] = [
+            'week' => mb_substr(trim((string) ($store['week'] ?? '')), 0, 40),
+            'days' => $days,
+            'rows' => $rows,
+        ];
+    }
+    if ($out === []) {
+        return ['ok' => false, 'message' => '没有收到任何门店课表', 'timetables' => []];
+    }
+    return ['ok' => true, 'message' => '', 'timetables' => $out];
+}
+
+/**
+/**
  * 渲染用课表：归一化 + 过滤非对外课程 + 丢掉过滤后整行无课的时段。
  * 未知门店或过滤后没有课，返回空的 rows（调用方据此整块不渲染）。
  *
@@ -393,20 +526,18 @@ function yimai_timetable_dot_class(string $name): string
 function yimai_studio_timetable(string $key): array
 {
     $empty = ['days' => [], 'week' => '', 'rows' => [], 'row_count' => 0, 'course_count' => 0, 'courses' => []];
-    $all = yimai_studio_timetables();
-    if (!isset($all[$key])) {
+    // 后台配置优先、文件兜底；两边的数据在这里走同一套归一化，前台表现一致。
+    $source = yimai_timetable_source($key);
+    if ($source === [] || !isset($source['rows'])) {
         return $empty;
     }
     // 表头只留「周一…周日」：静态课表带死日期，过一周就成了「上周的课表」，比不带更糟。
     // 周期（10.26–11.01）只出现一次，交给模板的 caption 与说明行。
-    $days = array_map(static function ($label): string {
-        $label = trim((string) $label);
-        return preg_match('/^(周[一二三四五六日天])/u', $label, $m) ? $m[1] : $label;
-    }, (array) ($all[$key]['days'] ?? []));
+    $days = yimai_timetable_day_labels((array) ($source['days'] ?? []));
     $rows = [];
     $courses = [];
     $classCount = 0;
-    foreach ((array) ($all[$key]['rows'] ?? []) as $row) {
+    foreach ((array) $source['rows'] as $row) {
         if (!is_array($row)) {
             continue;
         }
@@ -434,8 +565,13 @@ function yimai_studio_timetable(string $key): array
                 $extra = mb_substr($clean['name'], mb_strlen($cut[0]) - mb_strlen(mb_substr($clean['name'], 0, mb_strlen($cut[0]))));
                 $extra = mb_substr($clean['name'], mb_strlen($trunk)); // 含分隔符，DOM 文本拼回去等于全名
             }
+            $slotTime = trim((string) ($slot['time'] ?? ''));
+            if ($slotTime === '') {
+                // 后台保存的数据只有 start：结束时间按 +60 分钟生成（与后台一致的唯一口径）
+                $slotTime = yimai_timetable_slot_time((string) ($row['start'] ?? ''));
+            }
             $slots[] = [
-                'time'    => (string) ($slot['time'] ?? ''),
+                'time'    => $slotTime,
                 'course'  => $clean['name'],
                 'trunk'   => $trunk,
                 'extra'   => $extra,
@@ -453,7 +589,7 @@ function yimai_studio_timetable(string $key): array
     }
     return [
         'days'         => $days,
-        'week'         => trim((string) ($all[$key]['week'] ?? '')),
+        'week'         => trim((string) ($source['week'] ?? '')),
         'rows'         => $rows,
         'row_count'    => count($rows),
         'course_count' => $classCount,

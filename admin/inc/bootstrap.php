@@ -88,6 +88,15 @@ function load_config(bool $invalidate = false): array
 
 function save_config(array $config): void
 {
+    // 0) timetables 不在通用表单里（它由「门店课表」面板单独提交）：
+    //    通用保存的 payload 没有这个节点时，保留库里已有的，避免「保存全部更改」把课表抹掉。
+    if (!array_key_exists('timetables', $config)) {
+        $stored = json_decode((string) get_option(yimai_config_option_name(), ''), true);
+        if (is_array($stored) && array_key_exists('timetables', $stored)) {
+            $config['timetables'] = $stored['timetables'];
+        }
+    }
+
     // 1) 类型校验 + 规范化：类型不符直接抛 Yimai_Config_Type_Error，
     //    由调用方转成 400，绝不把坏类型写进 DB（否则前台 implode/取下标会 Fatal 白屏）。
     $config = yimai_config_validate($config, default_config(), 'config');
@@ -119,6 +128,44 @@ function save_config(array $config): void
 
     // 5) 同请求内让 load_config() 的静态缓存失效，避免保存后仍读到旧值
     load_config(true);
+}
+
+/**
+ * 「门店课表」保存（专用 op，与通用 data-path 保存分开）。
+ *
+ * 为什么单开一路：课表是「行 × 7 天 × 4 字段」的网格，塞进通用 data-path 引擎会变成
+ * 一堆 timetables.studio-east.rows.0.slots.3.course 的路径，既难渲染也难校验。
+ * 这里整体收一份 JSON，先清洗校验，通过才写库；失败返回可读原因且不落库。
+ */
+function yimai_timetables_handle_save(string $raw_json): void
+{
+    if (!function_exists('yimai_timetable_sanitize_config')) {
+        require_once YIMAI_THEME_DIR . '/inc/studio-timetables.php';
+    }
+    $posted = json_decode($raw_json, true);
+    if (!is_array($posted)) {
+        json_response(['message' => '课表 JSON 格式错误'], 400);
+    }
+    $result = yimai_timetable_sanitize_config($posted);
+    if (!$result['ok']) {
+        json_response(['message' => $result['message']], 400);
+    }
+    $config = load_config();
+    $current = is_array($config['timetables'] ?? null) ? $config['timetables'] : [];
+    $config['timetables'] = array_merge($current, $result['timetables']);
+    try {
+        save_config($config);
+    } catch (Yimai_Config_Type_Error $error) {
+        json_response(['message' => '课表保存失败（类型）：' . $error->getMessage()], 400);
+    } catch (Throwable $error) {
+        json_response(['message' => '课表保存失败：' . $error->getMessage()], 500);
+    }
+    // 同请求内的两套静态缓存都失效（前台下一请求重新读 option）
+    load_config(true);
+    if (function_exists('yimai_config')) {
+        yimai_config(true);
+    }
+    json_response(['message' => '门店课表已保存', 'timetables' => $config['timetables']]);
 }
 
 /** 备份脱敏：把密钥类字段替换为占位符（备份只用于回看文案，不需要真实密钥）。 */

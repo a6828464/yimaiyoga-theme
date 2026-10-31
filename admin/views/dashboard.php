@@ -18,6 +18,7 @@ if ($yimaiInWpAdmin) {
     $yimaiAjaxBase = admin_url('admin-ajax.php?action=yimai_admin_api');
     $yimaiEndpoints = [
         'save'         => $yimaiAjaxBase . '&op=save',
+        'timetables'   => $yimaiAjaxBase . '&op=save_timetables',
         'upload'       => $yimaiAjaxBase . '&op=upload',
         'imgbed-sync'  => $yimaiAjaxBase . '&op=imgbed-sync',
         'library'      => $yimaiAjaxBase . '&op=library',
@@ -29,6 +30,7 @@ if ($yimaiInWpAdmin) {
 } else {
     $yimaiEndpoints = [
         'save'         => yimai_admin_path('save'),
+        'timetables'   => yimai_admin_path('timetables'),
         'upload'       => yimai_admin_path('upload'),
         'imgbed-sync'  => yimai_admin_path('imgbed-sync'),
         'library'      => yimai_admin_path('library'),
@@ -42,6 +44,74 @@ if ($yimaiInWpAdmin) {
 $json = wp_json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 $theme_uri = get_template_directory_uri();
 $copySections = ['home' => '首页', 'classes' => '课程', 'instructors' => '师资', 'membership' => '会员', 'booking' => '预约', 'studio' => '空间', 'contact' => '联系', 'training' => '教培'];
+/* 新加的文案键给中文说明（后台仍以原 key 存取，只影响显示） */
+$copyKeyLabels = [
+    'latestEyebrow'    => '最新文章 · 小标',
+    'latestTitle'      => '最新文章 · 大标题',
+    'latestCta'        => '最新文章 · 跳转文案',
+    'homeIntroEyebrow' => '首页实体段 · 小标',
+    'homeIntroTitle'   => '首页实体段 · 大标题',
+    'homeIntroBody'    => '首页实体段 · 正文（段落之间空一行）',
+];
+/* 门店课表：编辑数据取「配置优先、文件兜底」的同一份源；保存走独立 op（bootstrap: yimai_timetables_handle_save） */
+$ttRegistry = function_exists('yimai_studio_page_registry') ? yimai_studio_page_registry() : [];
+$ttFileDefaults = function_exists('yimai_studio_timetables') ? yimai_studio_timetables() : [];
+$ttStores = [];
+foreach ($ttRegistry as $ttKey => $ttMeta) {
+    $ttSource = function_exists('yimai_timetable_source') ? yimai_timetable_source((string) $ttKey) : [];
+    $ttDefault = is_array($ttFileDefaults[$ttKey] ?? null) ? $ttFileDefaults[$ttKey] : [];
+    $ttNormalizeRows = static function ($rows): array {
+        $out = [];
+        foreach ((array) $rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $slots = array_values(is_array($row['slots'] ?? null) ? $row['slots'] : []);
+            $clean = [];
+            for ($d = 0; $d < 7; $d++) {
+                $slot = $slots[$d] ?? null;
+                $clean[] = is_array($slot) ? [
+                    'course'  => (string) ($slot['course'] ?? ''),
+                    'teacher' => (string) ($slot['teacher'] ?? ''),
+                    'room'    => (string) ($slot['room'] ?? ''),
+                    'rating'  => (int) ($slot['rating'] ?? 0),
+                ] : null;
+            }
+            $out[] = ['start' => (string) ($row['start'] ?? ''), 'slots' => $clean];
+        }
+        return $out;
+    };
+    $ttStores[(string) $ttKey] = [
+        'name'  => (string) ($ttMeta['name'] ?? $ttKey),
+        'week'  => trim((string) ($ttSource['week'] ?? '')),
+        'days'  => function_exists('yimai_timetable_day_labels')
+            ? yimai_timetable_day_labels((array) ($ttSource['days'] ?? []))
+            : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+        'rows'  => $ttNormalizeRows($ttSource['rows'] ?? []),
+        'default' => wp_json_encode([
+            'week' => trim((string) ($ttDefault['week'] ?? '')),
+            'rows' => $ttNormalizeRows($ttDefault['rows'] ?? []),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ];
+}
+/* 课表编辑网格的一行（PHP 渲染首屏 + <template> 供 JS 克隆，两处同源） */
+$ttRowHtml = static function (array $row): string {
+    $slots = array_values(is_array($row['slots'] ?? null) ? $row['slots'] : []);
+    $html = '<tr data-tt-row><th scope="row" class="tt-col-time">'
+        . '<input type="text" class="tt-start" data-tt-start value="' . h((string) ($row['start'] ?? '')) . '" placeholder="09:00" inputmode="numeric" maxlength="5" aria-label="开始时间">'
+        . '<button type="button" class="tt-row-del" data-tt-del-row aria-label="删除这一行">删本行</button>'
+        . '</th>';
+    for ($d = 0; $d < 7; $d++) {
+        $slot = is_array($slots[$d] ?? null) ? $slots[$d] : [];
+        $html .= '<td class="tt-cell-edit" data-tt-day="' . $d . '">'
+            . '<input type="text" data-tt-field="course" value="' . h((string) ($slot['course'] ?? '')) . '" placeholder="课程">'
+            . '<input type="text" data-tt-field="teacher" value="' . h((string) ($slot['teacher'] ?? '')) . '" placeholder="老师">'
+            . '<input type="text" data-tt-field="room" value="' . h((string) ($slot['room'] ?? '')) . '" placeholder="教室">'
+            . '<input type="text" data-tt-field="rating" value="' . h(isset($slot['rating']) ? (string) $slot['rating'] : '') . '" placeholder="星级" inputmode="numeric" maxlength="1">'
+            . '</td>';
+    }
+    return $html . '</tr>';
+};
 $imgbedMap = function_exists('yimai_imgbed_map') ? yimai_imgbed_map() : [];
 $imgbedDomain = function_exists('yimai_imgbed_config') ? (yimai_imgbed_config()['domain'] ?? '') : '';
 $uploadTarget = $config['site']['uploadTarget'] ?? 'imgbed';
@@ -70,6 +140,7 @@ $navGroups = [
     '内容' => [
         'copy' => '页面文案',
         'studios' => '门店',
+        'timetables' => '门店课表',
         'memberships' => '会员方案',
         'themes' => '课程主题',
         'paths' => '练习路径',
@@ -167,6 +238,27 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","
 .card h3{margin:0 0 14px;font-size:15px;letter-spacing:.02em}
 .card .hint{font-size:12px;color:var(--mut);margin-top:6px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* ---------- 门店课表编辑网格（横滚容器内，桌面 8 列，手机横滑） ---------- */
+.tt-hint{max-width:78ch}
+/* 保存动作条吸顶：13 行网格滚下去也能随时点保存（wp-admin 顶部管理条 32px 需让位） */
+.tt-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0 0;position:sticky;top:0;z-index:3;background:var(--card);padding:10px 0;border-bottom:1px solid var(--line)}
+body.admin-bar .tt-actions{top:32px}
+.tt-status{font-size:13px;color:var(--clay)}
+.tt-key{font-weight:400;font-size:11px;color:var(--mut);letter-spacing:.02em}
+.tt-week{max-width:260px;margin-bottom:12px}
+.tt-edit-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--input)}
+.tt-edit{border-collapse:collapse;width:100%;min-width:1000px}
+.tt-edit input::placeholder{color:var(--mut);opacity:.42}
+.tt-edit th,.tt-edit td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:6px;vertical-align:top;text-align:left}
+.tt-edit thead th{font-size:11px;font-weight:600;color:var(--mut);letter-spacing:.06em;background:var(--item)}
+.tt-edit tbody tr:last-child th,.tt-edit tbody tr:last-child td{border-bottom:0}
+.tt-edit th:last-child,.tt-edit td:last-child{border-right:0}
+.tt-col-time{width:104px;min-width:104px}
+.tt-edit input[type=text]{width:100%;padding:5px 7px;font-size:12px;border-radius:6px}
+.tt-edit .tt-start{text-align:center;font-variant-numeric:tabular-nums}
+.tt-row-del{margin-top:4px;width:100%;border:0;background:transparent;color:var(--mut);font-size:11px;padding:2px 0;cursor:pointer;text-align:center}
+.tt-row-del:hover{color:var(--clay);text-decoration:underline}
+@media (max-width:700px){.tt-edit{min-width:900px}.tt-week{max-width:none}.tt-actions{position:static;top:auto}}
 label{display:grid;gap:5px;font-size:12px;color:var(--mut)}
 input[type=text],input[type=url],input[type=password],select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;background:var(--input);outline:none;color:var(--ink);font-family:inherit}
 textarea{resize:vertical;min-height:64px}
@@ -460,7 +552,7 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
     <h3><?php echo h($label); ?></h3>
     <div class="grid2">
       <?php foreach (($config['copy'][$section] ?? []) as $key => $value): ?>
-      <label><?php echo h($key); ?><textarea data-path="copy.<?php echo h($section); ?>.<?php echo h($key); ?>"><?php echo h($value); ?></textarea></label>
+      <label><?php echo h($copyKeyLabels[$key] ?? $key); ?><?php if (isset($copyKeyLabels[$key])): ?><span class="hint" style="margin:0"><?php echo h($key); ?></span><?php endif; ?><textarea data-path="copy.<?php echo h($section); ?>.<?php echo h($key); ?>"><?php echo h($value); ?></textarea></label>
       <?php endforeach; ?>
     </div>
   </div>
@@ -475,6 +567,48 @@ $formAction = $yimaiInWpAdmin ? '#' : yimai_admin_path('save');
     <div data-editor-list="studios"></div>
     <button type="button" class="add-btn" data-add-item="studios">+ 添加门店</button>
   </div>
+</section>
+
+<!-- ===================== 门店课表 ===================== -->
+<section class="panel" data-panel="timetables">
+  <div class="card">
+    <h3>门店课表</h3>
+    <p class="hint tt-hint">行=时段、列=周一到周日，与前台门店页的课表同构。每格填 课程 / 老师 / 教室 / 星级（0–5），<b>课程留空即该格无课</b>；结束时间按开始时间 +60 分钟自动生成。</p>
+    <p class="hint tt-hint">改完点「保存门店课表」，它单独提交、不走底部「保存全部更改」。把某店的行全删掉再保存 = 该店不显示课表；「载入出厂课表」把默认那版填回编辑区（仍需点保存）。</p>
+    <p class="tt-actions">
+      <button type="button" class="upload-btn" data-tt-save>保存门店课表</button>
+      <button type="button" class="upload-btn" data-tt-default-all>载入出厂课表</button>
+      <span class="tt-status" data-tt-status></span>
+    </p>
+  </div>
+  <?php foreach ($ttStores as $ttKey => $ttStore): ?>
+  <div class="card" data-tt-store="<?php echo h($ttKey); ?>" data-tt-default="<?php echo h($ttStore['default']); ?>">
+    <h3><?php echo h($ttStore['name']); ?> 周课表 <span class="tt-key"><?php echo h($ttKey); ?></span></h3>
+    <label class="tt-week">适用周次<input type="text" data-tt-week value="<?php echo h($ttStore['week']); ?>" placeholder="如 11.02–11.08"></label>
+    <div class="tt-edit-wrap">
+      <table class="tt-edit">
+        <thead>
+          <tr>
+            <th scope="col" class="tt-col-time">时间</th>
+            <?php foreach ($ttStore['days'] as $ttDay): ?>
+              <th scope="col"><?php echo h($ttDay); ?></th>
+            <?php endforeach; ?>
+          </tr>
+        </thead>
+        <tbody data-tt-rows>
+          <?php
+          $ttRows = $ttStore['rows'] !== [] ? $ttStore['rows'] : [[]];
+          foreach ($ttRows as $ttRow) {
+              echo $ttRowHtml($ttRow);
+          }
+          ?>
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="add-btn" style="margin-top:10px" data-tt-add-row>+ 末尾加一行</button>
+    <template data-tt-row-template><?php echo $ttRowHtml([]); ?></template>
+  </div>
+  <?php endforeach; ?>
 </section>
 
 <!-- ===================== 会员方案 ===================== -->

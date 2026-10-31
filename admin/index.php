@@ -61,6 +61,15 @@ switch (true) {
         redirect_to(yimai_admin_path('login'));
         break;
 
+    case $path === '/admin/timetables':
+        require_admin();
+        if (request_method() !== 'POST') {
+            json_response(['message' => 'Method Not Allowed'], 405);
+        }
+        verify_csrf();
+        yimai_timetables_handle_save((string) wp_unslash($_POST['timetables_json'] ?? ''));
+        break;
+
     case $path === '/admin/save':
         require_admin();
         if (request_method() !== 'POST') {
